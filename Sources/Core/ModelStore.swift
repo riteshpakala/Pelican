@@ -1,0 +1,29 @@
+import Foundation
+import MLXLLM
+import MLXLMCommon
+
+/// Thin wrapper over Frigate's model loading (port of Fleet's ModelLoader).
+enum ModelStore {
+
+    static let defaultModelId = "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+
+    /// Download (if needed) and warm a HuggingFace MLX model, reporting progress
+    /// as `(fractionCompleted, status)`. Throws if the id is invalid/unavailable.
+    static func warm(
+        id: String,
+        onProgress: @Sendable @escaping (Double, String) -> Void
+    ) async throws {
+        _ = try await loadModelContainer(id: id) { progress in
+            onProgress(progress.fractionCompleted, progress.localizedDescription ?? "Working…")
+        }
+    }
+
+    /// True when mlx.metallib sits next to the running binary — without it, MLX
+    /// GPU inference dies at the first token with "Failed to load the default
+    /// metallib". Checked at launch so we can show a fix banner instead.
+    static var metallibPresent: Bool {
+        guard let executable = Bundle.main.executableURL else { return false }
+        let metallib = executable.deletingLastPathComponent().appendingPathComponent("mlx.metallib")
+        return FileManager.default.fileExists(atPath: metallib.path)
+    }
+}
