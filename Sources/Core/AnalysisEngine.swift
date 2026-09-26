@@ -134,7 +134,7 @@ final class AnalysisEngine: ObservableObject {
                     "\(flow.bytesIn)",
                     "\(flow.bytesOut)",
                     "\(age)",
-                    flow.state == .other ? "-" : flow.state.rawValue,
+                    flow.state == .none ? "-" : flow.state.label,
                 ].joined(separator: "\t")
             )
         }

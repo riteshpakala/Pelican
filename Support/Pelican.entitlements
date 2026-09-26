@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	No App Sandbox: Pelican runs /usr/bin/nettop, loads NetworkStatistics.framework, reads other
+	apps' bundles and code signatures, and caches HuggingFace models under the user's home.
+	No hardened-runtime exceptions: everything is statically linked, and MLX compiles its Metal
+	kernels through the Metal compiler service, not writable+executable CPU pages.
+	Add keys here (not on the codesign command line) so make-app.sh and make-pkg.sh pick them up.
+	-->
+</dict>
+</plist>

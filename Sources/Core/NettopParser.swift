@@ -1,7 +1,9 @@
 import Foundation
 
-/// One flow row from a nettop sample, attributed to its owning process row.
-struct NettopFlowSample: Sendable, Equatable {
+/// One socket as a capture source reports it: a nettop flow row attributed to its owning
+/// process row, or one NetworkStatistics source description. Endpoints use nettop's `-n`
+/// spelling (see `EndpointFormat`).
+struct FlowSample: Sendable, Equatable {
     let processName: String
     let pid: Int32
     let proto: FlowProto
@@ -11,9 +13,13 @@ struct NettopFlowSample: Sendable, Equatable {
     let state: String
     let bytesIn: UInt64
     let bytesOut: UInt64
+    var origin: FlowSourceKind = .nettop
+    var effectivePid: Int32? = nil
 }
 
-/// Pure parser for `nettop -x -L 1 -t external -J bytes_in,bytes_out,state,interface`.
+typealias NettopFlowSample = FlowSample
+
+/// Pure parser for `nettop -x -n -L 1 -J bytes_in,bytes_out,state,interface`.
 ///
 /// The CSV interleaves process rows (`apsd.368,,,88867,282427,`) with the flow
 /// rows belonging to them (`tcp4 10.0.0.132:49188<->17.57.144.23:5223,en0,Established,...`).

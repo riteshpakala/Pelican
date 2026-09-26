@@ -42,7 +42,7 @@ struct ModelView: View {
                 Text("Run this once after each build, then relaunch:")
                     .font(.pelicanSans(11))
                     .foregroundStyle(Color.pelicanInk.opacity(0.55))
-                Text("cd /Users/ritesh/Desktop/Pelican && ./build-metallib.sh debug")
+                Text(ModelStore.metallibFixCommand)
                     .font(.pelicanMono(11))
                     .foregroundStyle(Color.pelicanInk)
                     .padding(8)
@@ -131,7 +131,7 @@ struct ModelView: View {
         PelicanCard(padding: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel("Notes")
-                Text("Models are downloaded once from HuggingFace and cached in ~/Library/Caches/models. The default 4-bit Mistral-7B-Instruct is ~4.1 GB and needs ~5 GB of memory while loaded. All analysis runs on this Mac — no flow data ever leaves the machine.")
+                Text("Models are downloaded once from HuggingFace and cached under ~/Documents/huggingface (or $HF_HOME). The default 4-bit Mistral-7B-Instruct is ~4.1 GB and needs ~5 GB of memory while loaded. All analysis runs on this Mac — no flow data ever leaves the machine.")
                     .font(.pelicanSans(11.5))
                     .foregroundStyle(Color.pelicanInk.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)

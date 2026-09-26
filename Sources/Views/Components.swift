@@ -36,6 +36,16 @@ struct SectionLabel: View {
 struct PelicanButtonStyle: ButtonStyle {
     var prominent: Bool = true
     func makeBody(configuration: Configuration) -> some View {
+        StyledButton(configuration: configuration, prominent: prominent)
+    }
+}
+
+private struct StyledButton: View {
+    let configuration: ButtonStyleConfiguration
+    let prominent: Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
         configuration.label
             .font(.pelicanSans(13, weight: .medium))
             .padding(.horizontal, 16)
@@ -47,8 +57,9 @@ struct PelicanButtonStyle: ButtonStyle {
                     .opacity(configuration.isPressed ? 0.8 : 1)
             )
             .shadow(
-                color: prominent ? Color.pelicanGold.opacity(0.30) : .clear,
+                color: prominent && isEnabled ? Color.pelicanGold.opacity(0.30) : .clear,
                 radius: 4, y: 2)
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var appState = AppState()
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
         NavigationSplitView {
@@ -11,7 +11,6 @@ struct ContentView: View {
             detail
                 .background(Color.pelicanBG)
         }
-        .environmentObject(appState)
         .preferredColorScheme(.light)  // palette is light-only; lock it
     }
 
@@ -44,6 +43,9 @@ struct ContentView: View {
                             .font(.pelicanSans(13, weight: appState.screen == screen ? .semibold : .regular))
                             .foregroundStyle(Color.pelicanInk)
                         Spacer()
+                        if screen == .rao {
+                            TrustDot(monitor: appState.rao)
+                        }
                         if screen == .connections && appState.monitorRunning {
                             StatusDot(color: .pelicanGreen)
                         }
@@ -64,10 +66,14 @@ struct ContentView: View {
 
             Spacer()
 
-            Text("observe-only · nettop · on-device mistral")
-                .font(.pelicanMono(8.5))
-                .foregroundStyle(Color.pelicanInk.opacity(0.3))
-                .padding(12)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("observe-only · live socket events · on-device mistral")
+                Text(BuildInfo.current.line)
+                    .help(BuildInfo.current.builtAt.map { "Built \($0)" } ?? "Built from source")
+            }
+            .font(.pelicanMono(8.5))
+            .foregroundStyle(Color.pelicanInk.opacity(0.3))
+            .padding(12)
         }
         .background(Color.pelicanBG)
     }
@@ -75,6 +81,7 @@ struct ContentView: View {
     @ViewBuilder
     private var detail: some View {
         switch appState.screen {
+        case .rao: RaoView()
         case .connections: ConnectionsView()
         case .processes: ProcessesView()
         case .analysis: AnalysisView()

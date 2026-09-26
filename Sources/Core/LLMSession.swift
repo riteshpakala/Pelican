@@ -1,6 +1,7 @@
 import Foundation
 import MLXLLM
 import MLXLMCommon
+import FrigateBridge
 
 /// A streaming session against an on-device MLX model (port of Fleet's
 /// ChatSession, minus the LoRA branch).
@@ -50,7 +51,8 @@ actor LLMSession {
 
     private func loadedContext() async throws -> ModelContext {
         if let context { return context }
-        let ctx = try await loadModel(id: modelId)
+        let ctx = try await loadModel(
+            from: HubDownloader(), using: HubTokenizerLoader(), id: modelId)
         context = ctx
         return ctx
     }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The installer's rules: Apple silicon (MLX is arm64) and macOS 15 (the app's floor, which
+     scripts/make-pkg.sh checks against Support/Info.plist). One choice, installed to /Applications. -->
+<installer-gui-script minSpecVersion="2">
+    <title>Pelican</title>
+    <license file="LICENSE"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="15.0"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline>
+        <line choice="default">
+            <line choice="nyc.rao.pelican.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="nyc.rao.pelican.pkg" visible="false">
+        <pkg-ref id="nyc.rao.pelican.pkg"/>
+    </choice>
+    <pkg-ref id="nyc.rao.pelican.pkg">Pelican-component.pkg</pkg-ref>
+</installer-gui-script>

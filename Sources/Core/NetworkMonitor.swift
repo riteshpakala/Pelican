@@ -1,8 +1,12 @@
 import Foundation
 
-/// Polls `nettop` on an interval, diffs the flow table between ticks, and
-/// publishes snapshots. Observe-only and unprivileged — this is the userspace
-/// stand-in for a NetworkExtension content filter.
+/// Merges the capture sources into one flow table and publishes snapshots.
+/// Observe-only and unprivileged.
+///
+/// Merge rule: NetworkStatistics owns the lifecycle of every flow it has reported — a nettop
+/// poll that no longer lists such a flow does not close it; the NStat removal does. nettop
+/// opens and closes the flows NStat never reported (all of them, when NStat is unavailable).
+/// A flow is opened once, by whichever source reports its key first.
 actor NetworkMonitor {
 
     struct Snapshot: Sendable {
@@ -10,178 +14,340 @@ actor NetworkMonitor {
         var recentClosed: [Flow]  // bounded history of closed flows
         var newEvents: [FlowEvent]
         var parseSkips: Int
+        var sourceStatus: [FlowSourceKind: FlowSourceStatus]
     }
 
     static let closedHistoryLimit = 500
+    static let emitDebounce: Duration = .milliseconds(500)
+    /// After NStat (re)starts it re-reports every live socket at once; flows it still owned
+    /// from before and did not re-report within this window died while it was stopped.
+    static let nstatResyncWindow: Duration = .seconds(3)
 
     private let resolver = DNSResolver()
     private var table: [FlowKey: Flow] = [:]
     private var closedHistory: [Flow] = []
     private var parseSkips = 0
-    private var pollTask: Task<Void, Never>?
-    private var continuation: AsyncStream<Snapshot>.Continuation?
+    private var sourceStatus: [FlowSourceKind: FlowSourceStatus] = [:]
 
-    var isRunning: Bool { pollTask != nil }
+    private var tokenToKey: [UInt64: FlowKey] = [:]
+    private var nstatConfirmed: [FlowKey: Date] = [:]
+    private var recentlyClosedByNStat: [FlowKey: Date] = [:]
+    private var lastNettopKeys: Set<FlowKey> = []
+
+    private var pendingEvents: [FlowEvent] = []
+    private var pendingResolve: Set<String> = []
+    private var emitScheduled = false
+
+    private var sources: [any FlowSource] = []
+    private var sourceContinuation: AsyncStream<FlowSourceEvent>.Continuation?
+    private var consumer: Task<Void, Never>?
+    private var generation = 0
+    private var snapshotContinuation: AsyncStream<Snapshot>.Continuation?
+    private var cadence: Double = 4
+
+    private(set) var isRunning = false
 
     /// Single-consumer snapshot stream (AppState is the only subscriber).
     func snapshots() -> AsyncStream<Snapshot> {
         AsyncStream { continuation in
-            self.continuation = continuation
+            self.snapshotContinuation = continuation
         }
     }
 
-    func start(interval: Duration = .seconds(4)) {
-        guard pollTask == nil else { return }
-        pollTask = Task {
-            while !Task.isCancelled {
-                await tick()
-                try? await Task.sleep(for: interval)
+    func start(cadence: Double) {
+        guard !isRunning else { return }
+        isRunning = true
+        self.cadence = cadence
+        if sources.isEmpty {
+            let made = FlowSourceFactory.make()
+            sources = made.sources
+            for (kind, reason) in made.unavailable {
+                sourceStatus[kind] = .unavailable(reason)
             }
+        }
+        generation += 1
+        let current = generation
+        let (stream, continuation) = AsyncStream<FlowSourceEvent>.makeStream()
+        sourceContinuation = continuation
+        consumer = Task {
+            for await event in stream {
+                self.handle(event, generation: current)
+            }
+        }
+        for source in sources {
+            source.setCadence(cadence)
+            source.start(into: continuation)
         }
     }
 
     func stop() {
-        pollTask?.cancel()
-        pollTask = nil
+        guard isRunning else { return }
+        isRunning = false
+        generation += 1
+        for source in sources {
+            source.stop()
+            if case .running = sourceStatus[source.kind] { sourceStatus[source.kind] = .stopped }
+        }
+        sourceContinuation?.finish()
+        sourceContinuation = nil
+        consumer = nil
+        scheduleEmit()
     }
 
-    /// Record a model verdict on the flow table so it survives later ticks.
+    func setCadence(_ seconds: Double) {
+        cadence = seconds
+        for source in sources { source.setCadence(seconds) }
+    }
+
+    /// Record a model verdict on the flow table so it survives later updates.
     func applyVerdict(_ verdict: Verdict, to key: FlowKey) {
         if var flow = table[key] {
             flow.verdict = verdict
             table[key] = flow
-            emitSnapshot(newEvents: [
-                .verdictAssigned(key, processName: flow.processName, remote: flow.remoteAddress, verdict)
-            ])
-        } else if let idx = closedHistory.firstIndex(where: { $0.id == key }) {
-            closedHistory[idx].verdict = verdict
-            emitSnapshot(newEvents: [
-                .verdictAssigned(
-                    key, processName: closedHistory[idx].processName,
-                    remote: closedHistory[idx].remoteAddress, verdict)
-            ])
+            pendingEvents.append(.verdictAssigned(key, processName: flow.processName, remote: flow.remoteAddress, verdict))
+        } else if let index = closedHistory.firstIndex(where: { $0.id == key }) {
+            closedHistory[index].verdict = verdict
+            pendingEvents.append(.verdictAssigned(
+                key, processName: closedHistory[index].processName,
+                remote: closedHistory[index].remoteAddress, verdict))
         }
+        scheduleEmit()
     }
 
-    // MARK: - Polling
+    // MARK: - Test seams (internal; used by PelicanTests)
 
-    private func tick() async {
-        guard let csv = try? await Self.runNettop() else { return }
-        let parsed = NettopParser.parse(csv)
-        parseSkips = parsed.skippedLines
-        let now = Date()
-        var events: [FlowEvent] = []
+    /// Feed one source event as if a capture source had sent it.
+    func inject(_ event: FlowSourceEvent) {
+        handle(event, generation: generation)
+    }
 
-        // Local ports a pid is listening on — established flows landing on one
-        // of these are inbound.
-        var listenPorts: Set<String> = []
-        for sample in parsed.flows where sample.state == FlowState.listen.rawValue {
-            let (_, port) = NettopParser.splitEndpoint(sample.local, proto: sample.proto)
-            if let port { listenPorts.insert("\(sample.pid):\(port)") }
-        }
+    var activeFlowsForTesting: [Flow] { Array(table.values) }
 
-        var next: [FlowKey: Flow] = [:]
-        for sample in parsed.flows {
-            let key = FlowKey(pid: sample.pid, proto: sample.proto, local: sample.local, remote: sample.remote)
-            let (localAddr, localPort) = NettopParser.splitEndpoint(sample.local, proto: sample.proto)
-            let (remoteAddr, remotePort) = NettopParser.splitEndpoint(sample.remote, proto: sample.proto)
-            let state = FlowState(rawValue: sample.state) ?? .other
+    /// The events queued since the last snapshot, cleared.
+    func takeEventsForTesting() -> [FlowEvent] {
+        defer { pendingEvents = [] }
+        return pendingEvents
+    }
 
-            let direction: FlowDirection
-            if state == .listen || remoteAddr.isEmpty {
-                direction = .listening
-            } else if let localPort, listenPorts.contains("\(sample.pid):\(localPort)") {
-                direction = .inbound
-            } else {
-                direction = .outbound
-            }
+    // MARK: - Source events
 
-            if var existing = table[key] {
-                existing.state = state
-                existing.direction = direction
-                // Clamp negative deltas — counters reset when a 4-tuple is reused.
-                existing.deltaIn = sample.bytesIn >= existing.bytesIn ? sample.bytesIn - existing.bytesIn : 0
-                existing.deltaOut = sample.bytesOut >= existing.bytesOut ? sample.bytesOut - existing.bytesOut : 0
-                existing.bytesIn = sample.bytesIn
-                existing.bytesOut = sample.bytesOut
-                existing.lastSeen = now
-                next[key] = existing
-            } else {
-                let flow = Flow(
-                    id: key,
-                    processName: sample.processName,
-                    pid: sample.pid,
-                    proto: sample.proto,
-                    localAddress: localAddr,
-                    localPort: localPort,
-                    remoteAddress: remoteAddr,
-                    remotePort: remotePort,
-                    interface: sample.interface,
-                    state: state,
-                    direction: direction,
-                    bytesIn: sample.bytesIn,
-                    bytesOut: sample.bytesOut,
-                    deltaIn: 0,
-                    deltaOut: 0,
-                    firstSeen: now,
-                    lastSeen: now,
-                    resolvedHost: nil,
-                    verdict: nil
-                )
-                next[key] = flow
-                events.append(.opened(flow, at: now))
-                if flow.hasConcreteRemote {
-                    await resolver.requestResolve(remoteAddr)
+    private func handle(_ event: FlowSourceEvent, generation: Int) {
+        guard generation == self.generation else { return }  // a stopped run's leftovers
+        switch event {
+        case .snapshot(let samples, let skipped, let at):
+            applyNettop(samples, skipped: skipped, at: at)
+        case .upsert(let sample, let token, let at):
+            applyUpsert(sample, token: token, at: at)
+        case .removed(let token, let at):
+            applyRemoved(token: token, at: at)
+        case .status(let kind, let status):
+            sourceStatus[kind] = status
+            if kind == .nstat, status == .running {
+                tokenToKey = [:]
+                let startedAt = Date()
+                Task {
+                    try? await Task.sleep(for: Self.nstatResyncWindow)
+                    self.sweepAfterNStatStart(startedAt, generation: generation)
                 }
             }
         }
+        scheduleEmit()
+    }
 
-        // Flows gone this tick → closed, kept in bounded history.
-        for (key, var flow) in table where next[key] == nil {
-            flow.state = .closed
-            flow.lastSeen = now
-            closedHistory.insert(flow, at: 0)
-            events.append(.closed(key, processName: flow.processName, remote: flow.remoteAddress, at: now))
+    private func applyNettop(_ samples: [FlowSample], skipped: Int, at: Date) {
+        parseSkips = skipped
+        // Local ports a pid is listening on — established flows landing on one are inbound.
+        var listenPorts: Set<String> = []
+        for sample in samples where FlowState(label: sample.state) == .listen {
+            if let port = NettopParser.splitEndpoint(sample.local, proto: sample.proto).port {
+                listenPorts.insert("\(sample.pid):\(port)")
+            }
         }
+        recentlyClosedByNStat = recentlyClosedByNStat.filter { at.timeIntervalSince($0.value) < 15 }
+
+        var seen: Set<FlowKey> = []
+        for sample in samples {
+            let key = Self.key(for: sample)
+            seen.insert(key)
+            // NStat already reported this socket gone; nettop's poll is just late.
+            if recentlyClosedByNStat[key] != nil { continue }
+            upsert(key: key, sample: sample, at: at, source: .nettop, listenPorts: listenPorts)
+        }
+        lastNettopKeys = seen
+        for (key, flow) in table where !seen.contains(key) && !flow.seenBy.contains(.nstat) {
+            close(key, at: at)
+        }
+    }
+
+    private func applyUpsert(_ sample: FlowSample, token: UInt64, at: Date) {
+        let key = Self.key(for: sample)
+        if let previous = tokenToKey[token], previous != key {
+            // The socket's endpoints changed under the same source: a new flow.
+            nstatConfirmed.removeValue(forKey: previous)
+            close(previous, at: at)
+        }
+        tokenToKey[token] = key
+        recentlyClosedByNStat.removeValue(forKey: key)
+        upsert(key: key, sample: sample, at: at, source: .nstat, listenPorts: nil)
+        nstatConfirmed[key] = at
+    }
+
+    private func applyRemoved(token: UInt64, at: Date) {
+        guard let key = tokenToKey.removeValue(forKey: token) else { return }
+        nstatConfirmed.removeValue(forKey: key)
+        recentlyClosedByNStat[key] = at
+        close(key, at: at)
+    }
+
+    private func sweepAfterNStatStart(_ startedAt: Date, generation: Int) {
+        guard generation == self.generation else { return }
+        let now = Date()
+        for (key, flow) in table where flow.seenBy.contains(.nstat)
+            && (nstatConfirmed[key] ?? .distantPast) < startedAt {
+            if lastNettopKeys.contains(key) {
+                table[key]?.seenBy.remove(.nstat)   // hand it back to nettop
+            } else {
+                close(key, at: now)
+            }
+        }
+        scheduleEmit()
+    }
+
+    // MARK: - Table
+
+    static func key(for sample: FlowSample) -> FlowKey {
+        FlowKey(pid: sample.pid, proto: sample.proto, local: sample.local, remote: sample.remote)
+    }
+
+    private func upsert(key: FlowKey, sample: FlowSample, at: Date, source: FlowSourceKind, listenPorts: Set<String>?) {
+        let (localAddr, localPort) = NettopParser.splitEndpoint(sample.local, proto: sample.proto)
+        let (remoteAddr, remotePort) = NettopParser.splitEndpoint(sample.remote, proto: sample.proto)
+        let state = FlowState(label: sample.state)
+
+        // Listening means no peer. A socket reported in Listen state *with* a peer is a
+        // connection still being accepted — inbound.
+        let direction: FlowDirection
+        if remoteAddr.isEmpty {
+            direction = .listening
+        } else if state == .listen {
+            direction = .inbound
+        } else if let localPort, isListening(pid: sample.pid, port: localPort, listenPorts: listenPorts) {
+            direction = .inbound
+        } else {
+            direction = .outbound
+        }
+
+        if var existing = table[key] {
+            // Two sources, one socket: cumulative counters never go backwards.
+            let bytesIn = max(existing.bytesIn, sample.bytesIn)
+            let bytesOut = max(existing.bytesOut, sample.bytesOut)
+            existing.deltaIn = bytesIn - existing.bytesIn
+            existing.deltaOut = bytesOut - existing.bytesOut
+            existing.bytesIn = bytesIn
+            existing.bytesOut = bytesOut
+            existing.state = state
+            existing.direction = direction
+            if !sample.interface.isEmpty { existing.interface = sample.interface }
+            if let effective = sample.effectivePid { existing.effectivePid = effective }
+            existing.lastSeen = at
+            existing.seenBy.insert(source)
+            table[key] = existing
+        } else {
+            let scope = FlowScope.of(interface: sample.interface, local: localAddr, remote: remoteAddr)
+            let flow = Flow(
+                id: key,
+                processName: sample.processName,
+                pid: sample.pid,
+                proto: sample.proto,
+                localAddress: localAddr,
+                localPort: localPort,
+                remoteAddress: remoteAddr,
+                remotePort: remotePort,
+                interface: sample.interface,
+                state: state,
+                direction: direction,
+                bytesIn: sample.bytesIn,
+                bytesOut: sample.bytesOut,
+                deltaIn: 0,
+                deltaOut: 0,
+                firstSeen: at,
+                lastSeen: at,
+                resolvedHost: nil,
+                verdict: nil,
+                effectivePid: sample.effectivePid,
+                scope: scope,
+                seenBy: [source]
+            )
+            table[key] = flow
+            pendingEvents.append(.opened(flow, at: at))
+            if flow.hasConcreteRemote && scope == .external {
+                pendingResolve.insert(remoteAddr)
+            }
+        }
+    }
+
+    private func isListening(pid: Int32, port: UInt16, listenPorts: Set<String>?) -> Bool {
+        if listenPorts?.contains("\(pid):\(port)") == true { return true }
+        return table.values.contains { $0.pid == pid && $0.state == .listen && $0.localPort == port }
+    }
+
+    private func close(_ key: FlowKey, at: Date) {
+        guard var flow = table.removeValue(forKey: key) else { return }
+        flow.state = .closed
+        flow.lastSeen = at
+        closedHistory.insert(flow, at: 0)
         if closedHistory.count > Self.closedHistoryLimit {
             closedHistory.removeLast(closedHistory.count - Self.closedHistoryLimit)
         }
+        pendingEvents.append(.closed(flow, at: at))
+    }
 
-        // Fill in any reverse-DNS results that have landed since last tick.
-        for (key, var flow) in next where flow.resolvedHost == nil && flow.hasConcreteRemote {
-            if case .some(let name?) = await resolver.cachedName(for: flow.remoteAddress) {
-                flow.resolvedHost = name
-                next[key] = flow
+    // MARK: - Publishing
+
+    private func scheduleEmit() {
+        guard !emitScheduled else { return }
+        emitScheduled = true
+        Task {
+            try? await Task.sleep(for: Self.emitDebounce)
+            await self.flush()
+        }
+    }
+
+    private func flush() async {
+        emitScheduled = false
+        let toResolve = pendingResolve
+        pendingResolve = []
+        for ip in toResolve {
+            await resolver.requestResolve(ip)
+        }
+        // Fill in reverse-DNS names that have landed, on live flows and recent history. Names
+        // are gathered first and applied without suspending, so indices stay valid.
+        func needsName(_ flow: Flow) -> Bool {
+            flow.resolvedHost == nil && flow.hasConcreteRemote && flow.scope == .external
+        }
+        var ips: Set<String> = []
+        for flow in table.values where needsName(flow) { ips.insert(flow.remoteAddress) }
+        for flow in closedHistory.prefix(100) where needsName(flow) { ips.insert(flow.remoteAddress) }
+        var names: [String: String] = [:]
+        for ip in ips {
+            if case .some(let name?) = await resolver.cachedName(for: ip) { names[ip] = name }
+        }
+        if !names.isEmpty {
+            for (key, flow) in table where needsName(flow) {
+                if let name = names[flow.remoteAddress] { table[key]?.resolvedHost = name }
+            }
+            for index in closedHistory.indices.prefix(100) where needsName(closedHistory[index]) {
+                if let name = names[closedHistory[index].remoteAddress] { closedHistory[index].resolvedHost = name }
             }
         }
-
-        table = next
-        emitSnapshot(newEvents: events)
-    }
-
-    private func emitSnapshot(newEvents: [FlowEvent]) {
-        continuation?.yield(Snapshot(
+        let events = pendingEvents
+        pendingEvents = []
+        snapshotContinuation?.yield(Snapshot(
             flows: table.values.sorted { $0.firstSeen > $1.firstSeen },
             recentClosed: closedHistory,
-            newEvents: newEvents,
-            parseSkips: parseSkips
+            newEvents: events,
+            parseSkips: parseSkips,
+            sourceStatus: sourceStatus
         ))
-    }
-
-    private static func runNettop() async throws -> String {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-        proc.arguments = ["-x", "-L", "1", "-t", "external", "-J", "bytes_in,bytes_out,state,interface"]
-        let pipe = Pipe()
-        proc.standardOutput = pipe
-        proc.standardError = Pipe()
-        try proc.run()
-        // Drain the pipe off-actor before waiting — nettop's output can exceed
-        // the 64KB pipe buffer, and waitUntilExit first would deadlock.
-        let data = await Task.detached(priority: .utility) {
-            pipe.fileHandleForReading.readDataToEndOfFile()
-        }.value
-        proc.waitUntilExit()
-        return String(data: data, encoding: .utf8) ?? ""
     }
 }

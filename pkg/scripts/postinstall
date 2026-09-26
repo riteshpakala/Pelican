@@ -1,0 +1,14 @@
+#!/bin/bash
+# WHAT: After the install, open Pelican for whoever is at the Mac so monitoring starts right away.
+# PIN:  Runs as root, so the app is opened in the console user's session. Skipped for
+#       command-line installs (MDM, `installer -pkg`), where no one may be looking.
+#       Never fails the install.
+
+[ -n "${COMMAND_LINE_INSTALL:-}" ] && exit 0
+
+user="$(stat -f %Su /dev/console)"
+[ -z "$user" ] || [ "$user" = "root" ] || [ "$user" = "loginwindow" ] && exit 0
+uid="$(id -u "$user" 2>/dev/null)" || exit 0
+
+launchctl asuser "$uid" sudo -u "$user" open -a "$2/Pelican.app" >/dev/null 2>&1 || true
+exit 0

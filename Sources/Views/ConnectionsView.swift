@@ -12,7 +12,7 @@ struct ConnectionsView: View {
             if appState.flows.isEmpty && !appState.monitorRunning {
                 EmptyHero(
                     title: "The wire is quiet",
-                    subtitle: "Start the monitor to watch every process's incoming and outgoing connections, polled from nettop — no kernel extensions, no injection."
+                    subtitle: "Resume the monitor to watch every process's incoming and outgoing connections — live socket events from macOS, cross-checked with nettop. No kernel extensions, no injection."
                 )
             } else {
                 flowTable
@@ -37,7 +37,7 @@ struct ConnectionsView: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            Button(appState.monitorRunning ? "Stop monitor" : "Start monitor") {
+            Button(appState.monitorRunning ? "Pause monitor" : "Resume monitor") {
                 appState.monitorRunning ? appState.stopMonitor() : appState.startMonitor()
             }
             .buttonStyle(appState.monitorRunning ? .pelicanQuiet : .pelican)
@@ -45,13 +45,19 @@ struct ConnectionsView: View {
             if appState.monitorRunning {
                 HStack(spacing: 6) {
                     StatusDot(color: .pelicanGreen)
-                    Text("polling every \(Int(appState.pollInterval))s")
+                    Text(captureCaption)
                         .font(.pelicanSans(11))
                         .foregroundStyle(Color.pelicanInk.opacity(0.5))
                 }
             }
 
             Spacer()
+
+            Toggle("Show loopback", isOn: $appState.showLoopback)
+                .toggleStyle(.checkbox)
+                .font(.pelicanSans(11))
+                .foregroundStyle(Color.pelicanInk.opacity(0.6))
+                .help("Connections that never leave this Mac (127.0.0.1, ::1)")
 
             Toggle("Show closed", isOn: $showClosed)
                 .toggleStyle(.checkbox)
@@ -72,7 +78,15 @@ struct ConnectionsView: View {
     }
 
     private var displayedFlows: [Flow] {
-        showClosed ? appState.flows + appState.recentClosed : appState.flows
+        let all = showClosed ? appState.flows + appState.recentClosed : appState.flows
+        return appState.showLoopback ? all : all.filter { $0.scope == .external }
+    }
+
+    private var captureCaption: String {
+        if case .running = appState.captureStatus[.nstat] {
+            return "live kernel-socket events + nettop every \(Int(appState.pollInterval))s"
+        }
+        return "polling nettop every \(Int(appState.pollInterval))s"
     }
 
     private var selectedFlow: Flow? {
@@ -142,7 +156,7 @@ struct ConnectionsView: View {
             TableColumn("State") { flow in
                 HStack(spacing: 5) {
                     StatusDot(color: stateColor(flow.state))
-                    Text(flow.state == .other ? "—" : flow.state.rawValue)
+                    Text(flow.state.displayLabel)
                         .font(.pelicanSans(10))
                         .foregroundStyle(Color.pelicanInk.opacity(0.55))
                 }
@@ -216,8 +230,8 @@ struct ConnectionsView: View {
         switch state {
         case .established: return .pelicanGreen
         case .listen: return .pelicanGold
-        case .other: return Color.pelicanInk.opacity(0.3)
         case .closed: return Color.pelicanInk.opacity(0.2)
+        default: return state.isTerminal ? Color.pelicanInk.opacity(0.25) : Color.pelicanInk.opacity(0.3)
         }
     }
 }

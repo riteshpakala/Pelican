@@ -1,9 +1,45 @@
 import AppKit
 
-if CommandLine.arguments.contains("--selftest") {
+let arguments = CommandLine.arguments
+
+func argument(after flag: String) -> String? {
+    guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
+    let value = arguments[index + 1]
+    return value.hasPrefix("--") ? nil : value
+}
+
+if arguments.contains("--capture-probe") {
+    // Print every flow the capture layer opens and closes, optionally for one process name.
+    let seconds = argument(after: "--capture-probe").flatMap(Double.init) ?? 15
+    let filter = arguments.last.flatMap { $0.hasPrefix("--") || Double($0) != nil || $0 == arguments[0] ? nil : $0 }
+    Task {
+        await Probes.capture(seconds: seconds, filter: filter)
+        exit(0)
+    }
+    RunLoop.main.run()
+} else if arguments.contains("--trust-probe") {
+    let seconds = argument(after: "--trust-probe").flatMap(Double.init) ?? 12
+    Task { @MainActor in
+        await Probes.trust(seconds: seconds)
+        exit(0)
+    }
+    RunLoop.main.run()
+} else if let path = argument(after: "--snapshot") {
+    let seconds = arguments.last.flatMap(Double.init) ?? 10
+    NSApplication.shared.setActivationPolicy(.accessory)
+    Task { @MainActor in
+        await Probes.snapshot(to: path, after: seconds)
+        exit(0)
+    }
+    NSApplication.shared.run()
+} else if let target = argument(after: "--identity") {
+    Probes.identity(target)
+    exit(0)
+} else if arguments.contains("--selftest") {
     // Headless smoke test of the inference path: warm the default model, run
     // one tiny analysis batch, print parsed verdicts, exit non-zero on failure.
     Task {
+        print(BuildInfo.current.line)
         do {
             let session = LLMSession(modelId: ModelStore.defaultModelId)
             try await session.warmup()
