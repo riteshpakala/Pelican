@@ -1,6 +1,6 @@
 import AppKit
 import PelicanKit
-import UserNotifications
+@preconcurrency import UserNotifications
 
 extension TrustMonitor {
     /// Turn trust changes into a Dock badge and notifications.

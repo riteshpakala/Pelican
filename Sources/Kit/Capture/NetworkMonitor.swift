@@ -47,7 +47,16 @@ package actor NetworkMonitor {
 
     package private(set) var isRunning = false
 
+    /// Called with the pid of every newly seen flow, at the moment it is seen — before the
+    /// emit debounce, so a caller can read the process while it is still alive.
+    private var sighting: (@Sendable (Int32, Date) -> Void)?
+
     package init() {}
+
+    /// Report each new flow's process as it appears (see `ProcessTable.sight`).
+    package func onSighting(_ handler: @escaping @Sendable (Int32, Date) -> Void) {
+        sighting = handler
+    }
 
     /// Single-consumer snapshot stream (AppState is the only subscriber).
     package func snapshots() -> AsyncStream<Snapshot> {
@@ -281,6 +290,9 @@ package actor NetworkMonitor {
                 seenBy: [source]
             )
             table[key] = flow
+            // Before the debounce: the process may be gone by the time the snapshot is emitted.
+            sighting?(flow.pid, at)
+            if let effective = sample.effectivePid, effective != flow.pid { sighting?(effective, at) }
             pendingEvents.append(.opened(flow, at: at))
             if flow.hasConcreteRemote && scope == .external {
                 pendingResolve.insert(remoteAddr)

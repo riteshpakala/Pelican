@@ -213,7 +213,7 @@ final class AppState: ObservableObject {
     }
 
     func runAnalysis(instruction: String, presetName: String, scope: AnalysisScope) {
-        guard let llm else {
+        guard llm != nil else {
             analysis.analysisError = "Load the model first (Model tab)."
             return
         }
