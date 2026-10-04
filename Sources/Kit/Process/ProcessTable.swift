@@ -95,20 +95,24 @@ package final class ProcessTable: @unchecked Sendable {
 
     /// Record a chain ordered nearest-first, linking each to its parent's stamp.
     private func record(chain: [ProcessCore], at time: Date, enrich: Bool) {
-        var fresh: [ProcessStamp] = []
+        var incomplete: [ProcessStamp] = []
         for (index, core) in chain.enumerated() {
             let parent = index + 1 < chain.count ? chain[index + 1].stamp : parentStamp(of: core)
-            let known = tree.incarnation(pid: core.stamp.pid, at: time)?.stamp == core.stamp
+            let existing = tree.incarnation(pid: core.stamp.pid, at: time)
             tree.record(ProcessNode(
                 stamp: core.stamp,
                 parent: parent,
                 group: core.groupPid,
                 name: core.name,
                 firstSeen: time))
-            if !known { fresh.append(core.stamp) }
+            // The cheap scan records without details, so "needs enriching" is about what the
+            // node is missing, not about whether this is the first sighting.
+            if existing?.stamp != core.stamp || existing?.executablePath == nil {
+                incomplete.append(core.stamp)
+            }
         }
         guard enrich else { return }
-        for stamp in fresh { enrichLocked(stamp) }
+        for stamp in incomplete { enrichLocked(stamp) }
     }
 
     private func parentStamp(of core: ProcessCore) -> ProcessStamp? {

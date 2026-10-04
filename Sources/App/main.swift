@@ -1,4 +1,5 @@
 import AppKit
+import PelicanAITools
 import PelicanAnalyst
 import PelicanKit
 import PelicanRao
@@ -24,6 +25,14 @@ if arguments.contains("--capture-probe") {
     let seconds = argument(after: "--trust-probe").flatMap(Double.init) ?? 12
     Task { @MainActor in
         await RaoProbe.trust(seconds: seconds)
+        exit(0)
+    }
+    RunLoop.main.run()
+} else if arguments.contains("--ai-probe") {
+    // What Pelican can see of the AI tools on this Mac, and how each connection is sourced.
+    let seconds = argument(after: "--ai-probe").flatMap(Double.init) ?? 20
+    Task {
+        await AIToolsProbe.run(seconds: seconds)
         exit(0)
     }
     RunLoop.main.run()

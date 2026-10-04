@@ -61,9 +61,15 @@ let package = Package(
             path: "Sources/Rao",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .target(
+            name: "PelicanAITools",
+            dependencies: ["PelicanKit", "PelicanUI"],
+            path: "Sources/AITools",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "Pelican",
-            dependencies: ["PelicanKit", "PelicanUI", "PelicanAnalyst", "PelicanRao"],
+            dependencies: ["PelicanKit", "PelicanUI", "PelicanAnalyst", "PelicanRao", "PelicanAITools"],
             path: "Sources/App",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
@@ -85,6 +91,12 @@ let package = Package(
             name: "PelicanRaoTests",
             dependencies: ["PelicanKit", "PelicanRao"],
             path: "Tests/PelicanRaoTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "PelicanAIToolsTests",
+            dependencies: ["PelicanKit", "PelicanAITools"],
+            path: "Tests/PelicanAIToolsTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
