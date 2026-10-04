@@ -62,6 +62,12 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(
+            name: "PelicanGuard",
+            dependencies: ["PelicanKit", "PelicanUI"],
+            path: "Sources/Guard",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .target(
             name: "PelicanAITools",
             dependencies: ["PelicanKit", "PelicanUI"],
             path: "Sources/AITools",
@@ -69,7 +75,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "Pelican",
-            dependencies: ["PelicanKit", "PelicanUI", "PelicanAnalyst", "PelicanRao", "PelicanAITools"],
+            dependencies: ["PelicanKit", "PelicanUI", "PelicanAnalyst", "PelicanRao",
+                           "PelicanAITools", "PelicanGuard"],
             path: "Sources/App",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
@@ -91,6 +98,12 @@ let package = Package(
             name: "PelicanRaoTests",
             dependencies: ["PelicanKit", "PelicanRao"],
             path: "Tests/PelicanRaoTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "PelicanGuardTests",
+            dependencies: ["PelicanKit", "PelicanGuard"],
+            path: "Tests/PelicanGuardTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
