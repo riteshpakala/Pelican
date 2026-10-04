@@ -17,6 +17,14 @@ swift run --build-system native Pelican
 swift test --build-system native
 ```
 
+`./scripts/dev.sh` does the build, the metallib and the launch in one step, passing its arguments
+to Pelican (`CONFIG=release` for a release build):
+
+```bash
+./scripts/dev.sh
+./scripts/dev.sh --trust-probe 20
+```
+
 > **Why `--build-system native`:** SwiftPM's default engine tries to compile Frigate's vendored
 > `.metal` sources and fails where the Metal toolchain stub is broken; the native engine has no
 > Metal step, and `build-metallib.sh` compiles the shaders with `xcrun`. Set
@@ -98,7 +106,7 @@ Sources/
   Views/       ContentView (sidebar shell), Rao/ (trust screen, menubar), Connections,
                Processes, Analysis, Model
 Support/       Info.plist, entitlements, app icon
-scripts/       make-app.sh, make-pkg.sh, build-metallib.sh, gen-app-icon.swift, make-iconset.sh
+scripts/       dev.sh, make-app.sh, make-pkg.sh, build-metallib.sh, gen-app-icon.swift, make-iconset.sh
 pkg/           installer Distribution.xml and postinstall
 Tests/         PelicanTests (swift-testing)
 ```
