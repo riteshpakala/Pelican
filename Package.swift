@@ -29,6 +29,13 @@ let package = Package(
     platforms: [.macOS(.v15)],
     dependencies: [
         .package(path: frigatePath),
+        // The inspection engine's TLS and HTTP. Apple's own, rather than hand-written: a relay
+        // that gets TLS subtly wrong would be worse than no inspection at all. They are linked
+        // only by PelicanIntercept, never by the app's other modules.
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.27.0"),
+        .package(url: "https://github.com/apple/swift-nio-http2.git", from: "1.35.0"),
+        .package(url: "https://github.com/apple/swift-certificates.git", from: "1.6.0"),
     ],
     targets: [
         .target(
@@ -59,6 +66,20 @@ let package = Package(
             name: "PelicanRao",
             dependencies: ["PelicanKit", "PelicanUI"],
             path: "Sources/Rao",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .target(
+            name: "PelicanIntercept",
+            dependencies: [
+                "PelicanKit",
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOTLS", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "NIOHPACK", package: "swift-nio-http2"),
+                .product(name: "X509", package: "swift-certificates"),
+            ],
+            path: "Sources/Intercept",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(
@@ -98,6 +119,12 @@ let package = Package(
             name: "PelicanRaoTests",
             dependencies: ["PelicanKit", "PelicanRao"],
             path: "Tests/PelicanRaoTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "PelicanInterceptTests",
+            dependencies: ["PelicanKit", "PelicanIntercept"],
+            path: "Tests/PelicanInterceptTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
