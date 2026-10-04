@@ -39,7 +39,7 @@ Craft and Veil are listed as *coming soon* and will get the same checks when the
 
 ## What Pelican knows about Ambient
 
-Only product facts, all in [RaoApp.swift](Sources/Core/Rao/RaoApp.swift): bundle and helper
+Only product facts, all in [RaoApp.swift](Sources/Rao/RaoApp.swift): bundle and helper
 identifiers, loopback ports, the hosts Ambient contacts in each mode, and where it keeps its
 settings. No team ID, certificate name or signing material appears in this repository, its
 scripts or its build.

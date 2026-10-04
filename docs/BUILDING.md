@@ -94,19 +94,28 @@ of every commit and dependency pin. Bump `CFBundleVersion` in `Support/Info.plis
 
 ## Layout
 
+One package, split into modules so the compiler keeps them apart. Feature modules import only
+`PelicanKit` and `PelicanUI`, never each other or the app, and cross-module API is `package`,
+never `public`.
+
 ```
 Sources/
-  Core/
-    Capture/   FlowSource, NetworkStatistics events, nettop polling, endpoint formatting
-    Identity/  code signatures and process identity (path, bundle, parent, start time)
-    Rao/       app profiles, consent detection, attribution, classification, host table,
-               identity audit, day ledger + trust level, the trust monitor, reports
-    …          AppState, flow models, NetworkMonitor (merges the sources), DNSResolver,
-               LLMSession (MLX), ModelStore, AnalysisEngine, Presets, BuildInfo, Probes
-  Views/       ContentView (sidebar shell), Rao/ (trust screen, menubar), Connections,
-               Processes, Analysis, Model
+  Kit/         PelicanKit — flow models, capture (NetworkStatistics events, nettop polling,
+               NetworkMonitor merging them), DNS and forward-resolved hosts, code signatures
+               and process identity. Foundation only.
+  UI/          PelicanUI — the design system, shared components, MonitorHost (what a feature
+               screen may read from and ask of the app)
+  Analyst/     PelicanAnalyst — LLMSession, ModelStore, AnalysisEngine, Presets; the only
+               module that links MLX
+  Rao/         PelicanRao — everything about Rao's apps: profiles, consent detection,
+               attribution, classification, identity audit, day ledger + trust level, the trust
+               monitor, reports, alerts, the trust probe, and the Rao screen and menubar status
+  App/         Pelican, the executable — main, AppState, the sidebar shell, Connections,
+               Processes, Analysis, Model, the menubar, the other probes
 Support/       Info.plist, entitlements, app icon
 scripts/       dev.sh, make-app.sh, make-pkg.sh, build-metallib.sh, gen-app-icon.swift, make-iconset.sh
 pkg/           installer Distribution.xml and postinstall
-Tests/         PelicanTests (swift-testing)
+Tests/         PelicanKitTests, PelicanRaoTests (swift-testing)
 ```
+
+`swift test --build-system native --filter PelicanRaoTests` builds and tests Rao without the app.

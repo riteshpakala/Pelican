@@ -9,6 +9,11 @@
 // Run:     ./scripts/build-metallib.sh && swift run --build-system native Pelican
 // App:     ./scripts/make-app.sh      Installer: ./scripts/make-pkg.sh
 //
+// Modules: PelicanKit (capture, flows, process identity; Foundation only) ← PelicanUI (design
+//          system) and PelicanAnalyst (the only module linking MLX) ← PelicanRao (everything
+//          about Rao's apps, isolated) ← Pelican (the app). Feature modules never import each
+//          other or the app; cross-module API is `package`, never `public`.
+//
 // PIN: Frigate is a sibling checkout by path (FRIGATE_DIR overrides). Support/Info.plist is
 //      embedded into the binary with -sectcreate so `swift run` has a bundle identity and
 //      version; make-app.sh copies the same plist into the .app. Its LSMinimumSystemVersion
@@ -26,16 +31,40 @@ let package = Package(
         .package(path: frigatePath),
     ],
     targets: [
-        .executableTarget(
-            name: "Pelican",
+        .target(
+            name: "PelicanKit",
+            path: "Sources/Kit",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .target(
+            name: "PelicanUI",
+            dependencies: ["PelicanKit"],
+            path: "Sources/UI",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .target(
+            name: "PelicanAnalyst",
             dependencies: [
+                "PelicanKit",
                 .product(name: "MLXLLM", package: "Frigate"),
                 .product(name: "MLXLMCommon", package: "Frigate"),
                 .product(name: "MLX", package: "Frigate"),
                 .product(name: "FrigateBridge", package: "Frigate"),
             ],
-            path: "Sources",
+            path: "Sources/Analyst",
             // MLX's ModelContext and friends are non-Sendable; same setting Fleet uses.
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .target(
+            name: "PelicanRao",
+            dependencies: ["PelicanKit", "PelicanUI"],
+            path: "Sources/Rao",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .executableTarget(
+            name: "Pelican",
+            dependencies: ["PelicanKit", "PelicanUI", "PelicanAnalyst", "PelicanRao"],
+            path: "Sources/App",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .unsafeFlags([
@@ -47,9 +76,15 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "PelicanTests",
-            dependencies: ["Pelican"],
-            path: "Tests/PelicanTests",
+            name: "PelicanKitTests",
+            dependencies: ["PelicanKit"],
+            path: "Tests/PelicanKitTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "PelicanRaoTests",
+            dependencies: ["PelicanKit", "PelicanRao"],
+            path: "Tests/PelicanRaoTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
