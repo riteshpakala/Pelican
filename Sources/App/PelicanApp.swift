@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
-            AppState.shared.rao.flushNow()
+            AppState.shared.flushNow()
         }
     }
 }

@@ -37,10 +37,13 @@ if arguments.contains("--capture-probe") {
     }
     RunLoop.main.run()
 } else if let path = argument(after: "--snapshot") {
-    let seconds = arguments.last.flatMap(Double.init) ?? 10
+    // `--snapshot <file.png> [seconds] [rao|ai-tools]`
+    let rest = arguments.drop { $0 != path }.dropFirst()
+    let seconds = rest.compactMap(Double.init).first ?? 10
+    let screen: Screen = rest.contains("ai-tools") ? .aiTools : .rao
     NSApplication.shared.setActivationPolicy(.accessory)
     Task { @MainActor in
-        await Probes.snapshot(to: path, after: seconds)
+        await Probes.snapshot(to: path, after: seconds, screen: screen)
         exit(0)
     }
     NSApplication.shared.run()

@@ -1,4 +1,5 @@
 import Foundation
+import PelicanAITools
 import PelicanKit
 import PelicanRao
 import PelicanUI
@@ -97,15 +98,20 @@ import AppKit
 import SwiftUI
 
 extension Probes {
-    /// `Pelican --snapshot <file.png> [seconds]`: start watching as the app does, wait, then
+    /// `Pelican --snapshot <file.png> [seconds] [rao|ai-tools]`: start watching as the app does, wait, then
     /// render the Rao screen offscreen at full height — for documentation and for checking the
     /// layout without scrolling. Uses PELICAN_LEDGER_DIR when set.
     @MainActor
-    static func snapshot(to path: String, after seconds: Double) async {
+    static func snapshot(to path: String, after seconds: Double, screen: Screen = .rao) async {
         let state = AppState.shared
         state.launch()
         try? await Task.sleep(for: .seconds(seconds))
-        let host = NSHostingView(rootView: RaoView(monitor: state.rao, host: state.host).frame(width: 1180)
+        let page: AnyView
+        switch screen {
+        case .aiTools: page = AnyView(AIToolsView(store: state.aiTools, host: state.host))
+        default: page = AnyView(RaoView(monitor: state.rao, host: state.host))
+        }
+        let host = NSHostingView(rootView: page.frame(width: 1180)
             .background(Color.pelicanBG).preferredColorScheme(.light))
         host.frame = NSRect(x: 0, y: 0, width: 1180, height: 200)
         host.layoutSubtreeIfNeeded()
@@ -126,6 +132,6 @@ extension Probes {
         } catch {
             print("snapshot failed: \(error)")
         }
-        state.rao.flushNow()
+        state.flushNow()
     }
 }

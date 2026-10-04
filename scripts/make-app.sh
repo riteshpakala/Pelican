@@ -18,7 +18,8 @@
 #       sources and fails where the Metal toolchain stub is broken; `native` has no Metal step
 #       (build-metallib.sh does it with xcrun). PELICAN_BUILD_SYSTEM=swiftbuild flips back.
 # PIN:  Sign inside-out, never --deep. Package.swift and Support/Info.plist must agree on the
-#       minimum macOS. No team, certificate or profile name is written in this repository.
+#       minimum macOS. Pelican's own signing team, certificate and profile are never written in
+#       this repository.
 #
 #   ./scripts/make-app.sh [--install]
 #   DEVELOPER_ID=1 ./scripts/make-app.sh

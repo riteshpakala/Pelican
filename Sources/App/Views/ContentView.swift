@@ -1,3 +1,4 @@
+import PelicanAITools
 import PelicanKit
 import PelicanRao
 import PelicanUI
@@ -49,6 +50,9 @@ struct ContentView: View {
                         if screen == .rao {
                             TrustDot(monitor: appState.rao)
                         }
+                        if screen == .aiTools {
+                            AIToolsDot(store: appState.aiTools)
+                        }
                         if screen == .connections && appState.monitorRunning {
                             StatusDot(color: .pelicanGreen)
                         }
@@ -85,6 +89,7 @@ struct ContentView: View {
     private var detail: some View {
         switch appState.screen {
         case .rao: RaoView(monitor: appState.rao, host: appState.host)
+        case .aiTools: AIToolsView(store: appState.aiTools, host: appState.host)
         case .connections: ConnectionsView()
         case .processes: ProcessesView()
         case .analysis: AnalysisView()

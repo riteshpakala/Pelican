@@ -41,8 +41,10 @@ Craft and Veil are listed as *coming soon* and will get the same checks when the
 
 Only product facts, all in [RaoApp.swift](Sources/Rao/RaoApp.swift): bundle and helper
 identifiers, loopback ports, the hosts Ambient contacts in each mode, and where it keeps its
-settings. No team ID, certificate name or signing material appears in this repository, its
-scripts or its build.
+settings. No team ID, certificate name or signing material of Rao's or Pelican's own appears
+in this repository, its scripts or its build. (The AI Tools catalog does name other vendors'
+team IDs: they are what macOS reports for those vendors' apps, and showing them is how you
+check a process is really theirs.)
 
 ## How it watches, and what it can miss
 
@@ -51,8 +53,10 @@ two sources:
 
 - **Live socket events** from macOS's NetworkStatistics framework, which report each kernel
   socket as it opens and closes. This covers Ambient's local traffic.
-- **`nettop` polling**, every second while Ambient runs and every 5 seconds otherwise. This
-  covers URLSession and Network.framework connections, which is how Ambient reaches the internet.
+- **`nettop` polling**, every second while Ambient (or an AI tool that may use URLSession) runs,
+  every 2 seconds while only AI tools that use kernel sockets run, and every 5 seconds otherwise.
+  This covers URLSession and Network.framework connections, which is how Ambient reaches the
+  internet.
 
 Two limits, which Pelican reports rather than hides:
 
@@ -60,8 +64,9 @@ Two limits, which Pelican reports rather than hides:
   report says so.
 - Time Ambient ran while Pelican wasn't watching is counted, shown, and lowers the day's level.
 
-Pelican cannot block anything. Its own network use is DNS lookups and, only if you load the
-analyst model, a HuggingFace download.
+Pelican cannot block anything. Its own network use is DNS lookups (including the AI tools
+catalog's hostnames, so their addresses can be recognised) and, only if you load the analyst
+model, a HuggingFace download.
 
 ## Install
 
@@ -93,9 +98,32 @@ swift run --build-system native Pelican
 No certificates are needed. [docs/BUILDING.md](docs/BUILDING.md) covers the app bundle, the
 signed installer, headless diagnostics and the source layout.
 
+## AI Tools
+
+The **AI Tools** screen shows what the AI tools on this Mac send, and which one sent it. Claude
+Code and Cursor are recognised today; Codex and Muse are listed and attribute nothing until
+someone confirms their identifiers with `Pelican --ai-probe`.
+
+- **Every connection is sourced to its tool**, with the reason shown: the tool's code
+  signature, the app bundle it runs inside, or the process chain that leads back to it — so a
+  `curl` that Claude Code runs inside VS Code is Claude Code's, shown as
+  `curl ← zsh ← claude`, hosted in Visual Studio Code.
+- **Every destination gets a purpose** — the model, sign-in, telemetry, error reports,
+  updates, code — from the vendor's own published hosts. Telemetry and error reports are
+  counted separately, as traffic you did not ask for.
+- **It says what it cannot tell.** Without reading the traffic, an address is all Pelican has,
+  and a vendor's services often share one; when they do, the screen says so instead of
+  guessing. Contents are not visible.
+- **MCP servers** configured in Claude Code, Claude Desktop, Cursor or Codex are named when the
+  tool starts them. Those config files are read, never written, and their environment
+  variables and headers — where tokens live — are never read into Pelican.
+
+The catalog of tools is in [AIToolCatalog.swift](Sources/AITools/AIToolCatalog.swift). Every
+entry says whether it was observed on a real Mac or only taken from the vendor's documentation.
+
 ## Also in Pelican
 
-Beyond the Rao screen, Pelican is a general network monitor: **Connections** and **Processes**
+Beyond the Rao and AI Tools screens, Pelican is a general network monitor: **Connections** and **Processes**
 show every process's live flows, and **Analysis** has an on-device Mistral model review them for
 beaconing, exfiltration-sized transfers and unexpected talkers. All analysis is local.
 

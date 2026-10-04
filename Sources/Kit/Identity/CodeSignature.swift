@@ -1,8 +1,8 @@
 import Foundation
 import Security
 
-/// What macOS reports about a running process's code signature. Pelican embeds no team IDs
-/// or certificate names: it shows these observed values and applies generic consistency
+/// What macOS reports about a running process's code signature. Pelican embeds no signing
+/// identity of its own or of Rao's: it shows these observed values and applies generic consistency
 /// rules (RaoIdentityAuditor), so anyone can compare them with what a vendor publishes.
 package struct CodeSignature: Sendable, Equatable, Codable {
 

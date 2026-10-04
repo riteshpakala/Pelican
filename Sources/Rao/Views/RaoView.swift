@@ -55,14 +55,7 @@ private struct RaoContent: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Rao")
-                .font(.pelicanSerif(26, weight: .light, italic: true))
-                .foregroundStyle(Color.pelicanInk)
-            Text("live trust for the Rao apps that listen all day — every connection, checked against what you agreed to")
-                .font(.pelicanSans(12))
-                .foregroundStyle(Color.pelicanInk.opacity(0.45))
-        }
+        ScreenHeader("Rao", "live trust for the Rao apps that listen all day — every connection, checked against what you agreed to")
     }
 }
 
@@ -74,31 +67,8 @@ private struct AppSelector: View {
     var body: some View {
         HStack(spacing: 8) {
             ForEach(RaoApp.all) { app in
-                Button {
-                    selection = app.id
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(app.name)
-                            .font(.pelicanSans(12, weight: selection == app.id ? .semibold : .regular))
-                        if app.availability == .comingSoon {
-                            Text("soon")
-                                .font(.pelicanSans(9, weight: .medium))
-                                .foregroundStyle(Color.pelicanInk.opacity(0.45))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(Color.pelicanFill))
-                        }
-                    }
-                    .foregroundStyle(Color.pelicanInk)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(selection == app.id ? Color.pelicanGold.opacity(0.14) : Color.pelicanCard)
-                            .overlay(Capsule().strokeBorder(selection == app.id ? Color.pelicanGold.opacity(0.5) : Color.pelicanBorder, lineWidth: 1))
-                    )
-                }
-                .buttonStyle(.plain)
+                SelectorChip(app.name, tag: app.availability == .comingSoon ? "soon" : nil,
+                             selected: selection == app.id) { selection = app.id }
             }
         }
     }
@@ -653,17 +623,8 @@ private struct ActivityCard: View {
     }
 
     private func chip(_ option: Filter, count: Int) -> some View {
-        Button {
-            filter = option
-        } label: {
-            Text("\(option.rawValue) \(count)")
-                .font(.pelicanSans(10.5, weight: filter == option ? .semibold : .regular))
-                .foregroundStyle(option == .unexpected && count > 0 ? Color.pelicanError : Color.pelicanInk)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(filter == option ? Color.pelicanGold.opacity(0.14) : Color.pelicanFill))
-        }
-        .buttonStyle(.plain)
+        FilterChip(option.rawValue, count: count, selected: filter == option,
+                   tint: option == .unexpected ? .pelicanError : nil) { filter = option }
     }
 
     private func table(_ rows: [LedgerFlow]) -> some View {
@@ -696,12 +657,7 @@ private struct ActivityCard: View {
                     .lineLimit(1).truncationMode(.tail)
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.5))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pelicanBorder, lineWidth: 1))
-        )
+        .pelicanTableBackground()
     }
 
     private func detail(_ flow: LedgerFlow) -> some View {
@@ -728,10 +684,7 @@ private struct ActivityCard: View {
     }
 
     private func labeled(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            SectionLabel(label)
-            Text(value).font(.pelicanMono(10.5)).foregroundStyle(Color.pelicanInk).textSelection(.enabled)
-        }
+        LabeledValue(label, value)
     }
 }
 
