@@ -1,5 +1,6 @@
 import Foundation
 import PelicanAITools
+import PelicanGuard
 import PelicanKit
 import PelicanRao
 import PelicanUI
@@ -108,7 +109,8 @@ extension Probes {
         try? await Task.sleep(for: .seconds(seconds))
         let page: AnyView
         switch screen {
-        case .aiTools: page = AnyView(AIToolsView(store: state.aiTools, host: state.host))
+        case .aiTools: page = AnyView(AIToolsView(store: state.aiTools, host: state.host,
+                                                  exposures: { state.leakGuard.findings(forTool: $0) }))
         default: page = AnyView(RaoView(monitor: state.rao, host: state.host))
         }
         let host = NSHostingView(rootView: page.frame(width: 1180)

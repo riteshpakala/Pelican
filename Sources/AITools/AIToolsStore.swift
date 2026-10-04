@@ -18,6 +18,7 @@ package final class AIToolsStore: ObservableObject {
 
     package let catalog: [AITool]
     private let resolver: ToolResolver
+    private let inspector: any ProcessInspecting
     private let store: DayFileStore<ToolDay>
     private let hosts: HostTable
 
@@ -36,6 +37,12 @@ package final class AIToolsStore: ObservableObject {
     private var lastHostRefresh: Date?
     private var started = false
 
+    /// Told about each external tool flow as it is recorded or grows, so Leak Guard can predict
+    /// what an encrypted connection carries without the store knowing about the guard. For a
+    /// subprocess or MCP flow, the raw command line is passed for the guard to scan and discard;
+    /// it is never kept here.
+    package var onToolFlow: (@MainActor (_ flow: ToolFlow, _ claims: [String], _ rawCommand: [String]?) -> Void)?
+
     private let demandSubject = CurrentValueSubject<CaptureDemand, Never>(.idle)
     /// How closely capture must watch for the tools currently running.
     package var captureDemand: AnyPublisher<CaptureDemand, Never> {
@@ -44,9 +51,11 @@ package final class AIToolsStore: ObservableObject {
 
     package init(catalog: [AITool] = AITool.all,
                  resolver: ToolResolver? = nil,
-                 store: DayFileStore<ToolDay> = DayFileStore(folder: "ai-tools")) {
+                 store: DayFileStore<ToolDay> = DayFileStore(folder: "ai-tools"),
+                 inspector: any ProcessInspecting = LiveProcessInspector()) {
         self.catalog = catalog
         self.resolver = resolver ?? ToolResolver(catalog: catalog)
+        self.inspector = inspector
         self.store = store
         self.hosts = HostTable(hostnames: AITool.allHostnamesToResolve)
         self.day = ToolDay(day: DayFileStore<ToolDay>.dayKey(for: Date()),
@@ -185,7 +194,16 @@ package final class AIToolsStore: ObservableObject {
         }
         if !day.toolsSeen.contains(attribution.toolID) { day.toolsSeen.append(attribution.toolID) }
         rollUp(record)
+        notify(record)
         scheduleSave()
+    }
+
+    /// Hand a flow to whoever is listening (Leak Guard), with the raw command line for a
+    /// subprocess so it can be scanned and dropped. Nothing of it is kept here.
+    private func notify(_ record: ToolFlow) {
+        guard let onToolFlow else { return }
+        let command = record.origin == .tool ? nil : inspector.arguments(pid: record.pid)
+        onToolFlow(record, record.claims, command)
     }
 
     private func close(_ flow: Flow) {
@@ -194,6 +212,7 @@ package final class AIToolsStore: ObservableObject {
         day.flows[position].bytesIn = max(day.flows[position].bytesIn, flow.bytesIn)
         day.flows[position].bytesOut = max(day.flows[position].bytesOut, flow.bytesOut)
         rollUp(day.flows[position])
+        notify(day.flows[position])
         scheduleSave()
     }
 

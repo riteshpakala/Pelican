@@ -121,11 +121,31 @@ someone confirms their identifiers with `Pelican --ai-probe`.
 The catalog of tools is in [AIToolCatalog.swift](Sources/AITools/AIToolCatalog.swift). Every
 entry says whether it was observed on a real Mac or only taken from the vendor's documentation.
 
+## Leak Guard
+
+Across every screen, Pelican notes what personal information leaves this Mac — and always says
+how it knows, because the difference matters:
+
+- **Seen** means Pelican read it, and the finding says where it was read.
+- **Likely** means the traffic was encrypted and Pelican is inferring from something it can
+  name: the vendor's own documentation for that endpoint, what earlier readable traffic to it
+  carried on this Mac, the fact that the destination is a known analytics or crash collector,
+  or an upload far larger than its reply.
+
+The two are never added together. Findings are kept for 30 days in
+`~/Library/Application Support/Pelican/ledger/guard/`, and a finding never holds the value it
+is about — only a masked sample, enough to recognise and not enough to use.
+
+Until inspection exists, almost everything is *Likely*: the only text Pelican can read is
+hostnames and the command lines of what an agent runs. The detectors that will read request
+contents are written and tested, and switch on when inspection does.
+
 ## Also in Pelican
 
 Beyond the Rao and AI Tools screens, Pelican is a general network monitor: **Connections** and **Processes**
-show every process's live flows, and **Analysis** has an on-device Mistral model review them for
-beaconing, exfiltration-sized transfers and unexpected talkers. All analysis is local.
+show every process's live flows with what Leak Guard has noted about each, and **Analysis** has
+an on-device Mistral model review them for beaconing, exfiltration-sized transfers, unexpected
+talkers and privacy exposure. All analysis is local.
 
 ## License
 

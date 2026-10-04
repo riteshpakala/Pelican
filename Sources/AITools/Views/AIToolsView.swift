@@ -5,21 +5,27 @@ import SwiftUI
 package struct AIToolsView: View {
     let store: AIToolsStore
     let host: MonitorHost
+    /// Leak Guard's findings for the shown tool, passed in so this module stays independent
+    /// of the guard. Keyed by tool id; nil means every tool.
+    let exposures: (String?) -> [ExposureFinding]
 
-    package init(store: AIToolsStore, host: MonitorHost) {
+    package init(store: AIToolsStore, host: MonitorHost,
+                 exposures: @escaping (String?) -> [ExposureFinding] = { _ in [] }) {
         self.store = store
         self.host = host
+        self.exposures = exposures
     }
 
     package var body: some View {
         // The store is an ObservableObject; observe it in a child view.
-        AIToolsContent(store: store, host: host)
+        AIToolsContent(store: store, host: host, exposures: exposures)
     }
 }
 
 private struct AIToolsContent: View {
     @ObservedObject var store: AIToolsStore
     let host: MonitorHost
+    let exposures: (String?) -> [ExposureFinding]
     /// nil = every tool.
     @State private var selected: String?
 
@@ -35,6 +41,7 @@ private struct AIToolsContent: View {
                 if let tool, tool.awaitingFingerprint {
                     AwaitingFingerprintCard(tool: tool)
                 } else {
+                    ExposureCard(findings: exposures(tool?.id))
                     SurfacesCard(store: store, tool: tool)
                     EndpointsCard(store: store, tool: tool)
                     ActivityCard(store: store, tool: tool)
@@ -145,6 +152,19 @@ private struct AwaitingFingerprintCard: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
+        }
+    }
+}
+
+// MARK: - Exposure
+
+private struct ExposureCard: View {
+    let findings: [ExposureFinding]
+
+    var body: some View {
+        PelicanCard(padding: 14) {
+            ExposureList(findings: findings)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

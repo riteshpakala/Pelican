@@ -66,5 +66,20 @@ extension AnalysisPreset {
             whether the port fits the process.
             """
         ),
+        AnalysisPreset(
+            name: "Privacy exposure",
+            symbol: "eye.trianglebadge.exclamationmark",
+            summary: "Where personal information is likely to go",
+            prompt: """
+            Flag flows that are likely to carry personal information off this Mac: \
+            connections to analytics, telemetry, crash-reporting or advertising \
+            hosts (names containing analytics, telemetry, metrics, intake, events, \
+            sentry, segment, amplitude, mixpanel, datadog, doubleclick), uploads \
+            much larger than their replies, and AI tools sending to hosts other \
+            than their own model API. You cannot see contents — say what the \
+            destination and volume suggest, not what was sent. A well-known \
+            model API carrying a prompt is expected and worth a low score.
+            """
+        ),
     ]
 }

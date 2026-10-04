@@ -1,4 +1,5 @@
 import PelicanAITools
+import PelicanGuard
 import PelicanKit
 import PelicanRao
 import PelicanUI
@@ -89,11 +90,26 @@ struct ContentView: View {
     private var detail: some View {
         switch appState.screen {
         case .rao: RaoView(monitor: appState.rao, host: appState.host)
-        case .aiTools: AIToolsView(store: appState.aiTools, host: appState.host)
+        case .aiTools: AIToolsScreen(store: appState.aiTools, guard: appState.leakGuard,
+                                     host: appState.host)
         case .connections: ConnectionsView()
         case .processes: ProcessesView()
         case .analysis: AnalysisView()
         case .model: ModelView()
         }
+    }
+}
+
+/// Hands Leak Guard's findings to the AI Tools screen. It lives here, not in the AI tools
+/// module, so that module never depends on the guard — and observing the guard here means new
+/// findings appear as they are made.
+private struct AIToolsScreen: View {
+    let store: AIToolsStore
+    @ObservedObject var `guard`: LeakGuard
+    let host: MonitorHost
+
+    var body: some View {
+        AIToolsView(store: store, host: host,
+                    exposures: { `guard`.findings(forTool: $0) })
     }
 }

@@ -115,12 +115,16 @@ Sources/
   AITools/     PelicanAITools — the AI tools catalog, attribution (signature, bundle, path,
                process lineage), MCP config reading, the day's record, the AI Tools screen,
                and the --ai-probe
+  Guard/       PelicanGuard — Leak Guard: the detectors (this Mac's identifiers, patterns,
+               field names), the predictor for encrypted traffic, known collectors, and the
+               day's findings
   App/         Pelican, the executable — main, AppState, the sidebar shell, Connections,
                Processes, Analysis, Model, the menubar, the other probes
 Support/       Info.plist, entitlements, app icon
 scripts/       dev.sh, make-app.sh, make-pkg.sh, build-metallib.sh, gen-app-icon.swift, make-iconset.sh
 pkg/           installer Distribution.xml and postinstall
-Tests/         PelicanKitTests, PelicanRaoTests, PelicanAIToolsTests (swift-testing)
+Tests/         PelicanKitTests, PelicanRaoTests, PelicanAIToolsTests, PelicanGuardTests
+               (swift-testing)
 ```
 
 `swift test --build-system native --filter PelicanRaoTests` builds and tests Rao without the app.

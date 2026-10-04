@@ -1,3 +1,4 @@
+import PelicanGuard
 import PelicanKit
 import PelicanUI
 import SwiftUI
@@ -25,7 +26,7 @@ struct ProcessesView: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         ForEach(appState.processRollups) { rollup in
-                            ProcessRow(rollup: rollup)
+                            ProcessRow(rollup: rollup, guard: appState.leakGuard)
                         }
                     }
                     .padding(.bottom, 24)
@@ -38,6 +39,7 @@ struct ProcessesView: View {
 
 private struct ProcessRow: View {
     let rollup: ProcessRollup
+    @ObservedObject var `guard`: LeakGuard
     @State private var expanded = false
 
     var body: some View {
@@ -59,6 +61,7 @@ private struct ProcessRow: View {
                         if let verdict = rollup.worstVerdict {
                             VerdictBadge(verdict: verdict)
                         }
+                        exposure
                         Spacer()
                         Text("\(rollup.flows.count) flow\(rollup.flows.count == 1 ? "" : "s")")
                             .font(.pelicanSans(11))
@@ -104,5 +107,12 @@ private struct ProcessRow: View {
                 }
             }
         }
+    }
+
+    /// What has left this Mac from this process.
+    private var exposure: some View {
+        let findings = `guard`.findings(forOrigin: rollup.name)
+        return ExposureBadge(seen: findings.filter { $0.evidence.isSeen }.count,
+                             likely: findings.filter { !$0.evidence.isSeen }.count)
     }
 }

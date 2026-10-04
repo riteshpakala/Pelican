@@ -115,9 +115,10 @@ package struct ExposurePredictor: Sendable {
     ) -> [ExposureFinding] {
         var out: [ExposureFinding] = []
 
-        func add(_ subject: String, _ category: DataCategory, _ basis: ExposureBasis, _ detail: String) {
+        func add(_ subject: String, _ category: DataCategory, _ basis: ExposureBasis,
+                 _ detail: String, key: String = "") {
             out.append(ExposureFinding(
-                id: "\(originName)|\(endpoint)|\(category.rawValue)|\(subject)",
+                id: "\(originName)|\(endpoint)|\(category.rawValue)|\(subject)|\(key)",
                 subject: subject, category: category, evidence: .likely(basis), detail: detail,
                 originName: originName, toolID: toolID, endpoint: endpoint,
                 firstSeen: time, lastSeen: time))
@@ -141,10 +142,12 @@ package struct ExposurePredictor: Sendable {
             }
         }
 
-        // 3. What the vendor says it carries.
+        // 3. What the vendor says it carries. Each claim is its own finding — two claims
+        // about one endpoint are two different things to check.
         for claim in claims {
-            add("what the vendor says it sends", .usage, .documented("the vendor documents: \(claim)"),
-                "Pelican cannot check this without reading the traffic.")
+            add("a claim about this endpoint", .usage, .documented(claim),
+                "Pelican cannot check this without reading the traffic.",
+                key: String(claim.prefix(40)))
         }
 
         // 4. How much left, compared with what came back.

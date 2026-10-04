@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import PelicanAITools
 import PelicanAnalyst
+import PelicanGuard
 import PelicanKit
 import PelicanRao
 import PelicanUI
@@ -67,11 +68,15 @@ final class AppState: ObservableObject {
     let metallibPresent = ModelStore.metallibPresent
 
     let monitor = NetworkMonitor()
-    let analysis = AnalysisEngine()
+    /// One gate, so a background pass and a manual analysis take turns on the model.
+    let modelGate = ModelGate()
+    let analysis: AnalysisEngine
     /// Ambient's trust ledger — the Rao tab.
     let rao = TrustMonitor()
     /// The AI tools on this Mac — the AI Tools tab.
     let aiTools = AIToolsStore()
+    /// What personal information leaves this Mac, shown inside the existing screens.
+    let leakGuard = LeakGuard()
     private var cancellables: Set<AnyCancellable> = []
     private(set) var llm: LLMSession?
     private var snapshotTask: Task<Void, Never>?
@@ -80,10 +85,23 @@ final class AppState: ObservableObject {
     private static let knownModelsKey = "pelican.knownModels"
 
     init() {
+        analysis = AnalysisEngine(gate: modelGate)
         let defaults = UserDefaults.standard
         modelId = defaults.string(forKey: Self.modelIdKey) ?? ModelStore.defaultModelId
         let known = defaults.stringArray(forKey: Self.knownModelsKey) ?? []
         knownModels = known.isEmpty ? [ModelStore.defaultModelId] : known
+
+        // Leak Guard reads what the AI tools store records, without either knowing the other.
+        let leakGuard = self.leakGuard
+        aiTools.onToolFlow = { flow, claims, command in
+            leakGuard.observe(
+                flow: ToolFlowFacts(
+                    originName: flow.originLabel, toolID: flow.toolID,
+                    endpoint: flow.host.display, candidates: flow.host.allNames,
+                    bytesOut: flow.bytesOut, bytesIn: flow.bytesIn,
+                    at: flow.closedAt ?? flow.openedAt),
+                claims: claims, rawCommand: command)
+        }
 
         // Poll as often as the most demanding feature needs (CaptureDemand).
         rao.captureDemand.combineLatest(aiTools.captureDemand.prepend(.idle))
@@ -110,6 +128,7 @@ final class AppState: ObservableObject {
     func launch() {
         rao.start()
         aiTools.start()
+        leakGuard.start()
         // Trace each new flow's process the moment it appears, before it can exit.
         let aiTools = self.aiTools
         Task { await monitor.onSighting { pid, time in aiTools.sight(pid: pid, at: time) } }
@@ -120,6 +139,7 @@ final class AppState: ObservableObject {
     func flushNow() {
         rao.flushNow()
         aiTools.flushNow()
+        leakGuard.flushNow()
     }
 
     private func setCadence(_ seconds: Double) {
@@ -135,6 +155,7 @@ final class AppState: ObservableObject {
         monitorRunning = true
         rao.setObserving(true)
         aiTools.setObserving(true)
+        leakGuard.setObserving(true)
         let cadence = pollInterval
         if snapshotTask == nil {
             snapshotTask = Task {
@@ -155,6 +176,7 @@ final class AppState: ObservableObject {
         monitorRunning = false
         rao.setObserving(false)
         aiTools.setObserving(false)
+        leakGuard.setObserving(false)
         Task { await monitor.stop() }
     }
 

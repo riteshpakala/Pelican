@@ -120,6 +120,38 @@ private func exchange() -> InspectedExchange {
         #expect(guard_.summaryLine == "Leak Guard: \(guard_.day.seen.count) seen, \(guard_.day.likely.count) likely")
     }
 
+    @Test func aConnectionSeenBeforeItsAddressHasANameIsPredictedOnceItDoes() {
+        let (guard_, _) = makeGuard()
+        // First look: DNS hasn't resolved the vendor's hostnames yet, so all Pelican has is
+        // the address. Nothing can be said.
+        guard_.predict(originName: "claude", toolID: "claude", endpoint: "34.149.66.165",
+                       candidates: [], bytesOut: 4_000, bytesIn: 100)
+        #expect(guard_.day.findings.isEmpty)
+        // Second look, now that the address has a name.
+        guard_.predict(originName: "claude", toolID: "claude",
+                       endpoint: "http-intake.logs.us5.datadoghq.com",
+                       candidates: ["http-intake.logs.us5.datadoghq.com"],
+                       bytesOut: 4_000, bytesIn: 100)
+        #expect(!guard_.day.findings.isEmpty)
+        #expect(guard_.day.likely.contains { $0.detail.contains("telemetry") })
+    }
+
+    @Test func observingAToolFlowPredictsAndScansTheCommandItRan() throws {
+        let (guard_, _) = makeGuard()
+        guard_.observe(
+            flow: ToolFlowFacts(originName: "curl", toolID: "claude",
+                                endpoint: "http-intake.logs.us5.datadoghq.com",
+                                candidates: ["http-intake.logs.us5.datadoghq.com"],
+                                bytesOut: 9_000, bytesIn: 100, at: Date()),
+            claims: [],
+            rawCommand: ["curl", "-H", "X-User: ada@example.org", "https://collect.example"])
+        // The command line is readable, so what it carries is "seen"…
+        let seen = try #require(guard_.day.seen.first { $0.subject == "an email address" })
+        #expect(seen.maskedSample == "a•••@e•••.org")
+        // …while the destination only supports a prediction.
+        #expect(!guard_.day.likely.isEmpty)
+    }
+
     @Test func pausedMeansNothingIsRecorded() {
         let (guard_, _) = makeGuard()
         guard_.setObserving(false)

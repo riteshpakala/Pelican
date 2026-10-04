@@ -127,13 +127,33 @@ package final class LeakGuard: ObservableObject {
         guard observing else { return }
         let key = "\(originName)|\(endpoint)|\(bytesOut > 1_048_576)"
         guard !predicted.contains(key) else { return }
-        predicted.insert(key)
         let profile = day.profiles.first { $0.originName == originName && $0.endpoint == endpoint }
-        for finding in predictor.predict(
+        let findings = predictor.predict(
             originName: originName, toolID: toolID, endpoint: endpoint, candidates: candidates,
-            claims: claims, profile: profile, bytesOut: bytesOut, bytesIn: bytesIn, at: time) {
-            record(finding)
+            claims: claims, profile: profile, bytesOut: bytesOut, bytesIn: bytesIn, at: time)
+        // A connection seen before its address has a name yields nothing; don't let that first
+        // uninformed look stop a later one that knows where it went.
+        guard !findings.isEmpty else { return }
+        predicted.insert(key)
+        for finding in findings { record(finding) }
+    }
+
+    // MARK: - Watching the AI tools
+
+    /// One connection an AI tool made. Pelican cannot read it, so this produces predictions —
+    /// except for the command line of something the tool ran, which it can read.
+    ///
+    /// `rawCommand` is scanned and dropped: only a masked finding survives.
+    package func observe(flow: ToolFlowFacts, claims: [String], rawCommand: [String]?) {
+        guard observing else { return }
+        if let rawCommand, !rawCommand.isEmpty {
+            scan(rawCommand.joined(separator: " "), where: "command \(flow.originName) was run with",
+                 originName: flow.originName, toolID: flow.toolID, endpoint: flow.endpoint,
+                 at: flow.at)
         }
+        predict(originName: flow.originName, toolID: flow.toolID, endpoint: flow.endpoint,
+                candidates: flow.candidates, claims: claims,
+                bytesOut: flow.bytesOut, bytesIn: flow.bytesIn, at: flow.at)
     }
 
     // MARK: - Test seam (internal; used by the tests through @testable import)

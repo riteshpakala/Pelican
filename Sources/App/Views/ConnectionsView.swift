@@ -1,3 +1,4 @@
+import PelicanGuard
 import PelicanKit
 import PelicanUI
 import SwiftUI
@@ -20,6 +21,7 @@ struct ConnectionsView: View {
                 flowTable
                 if let flow = selectedFlow {
                     detailCard(flow)
+                    ExposureDetail(guard: appState.leakGuard, processName: flow.processName)
                 }
             }
         }
@@ -171,6 +173,11 @@ struct ConnectionsView: View {
                 }
             }
             .width(min: 90, ideal: 110)
+
+            TableColumn("Exposure") { flow in
+                ExposureCell(guard: appState.leakGuard, processName: flow.processName)
+            }
+            .width(min: 80, ideal: 100)
         }
         .scrollContentBackground(.hidden)
         .background(
@@ -234,6 +241,34 @@ struct ConnectionsView: View {
         case .listen: return .pelicanGold
         case .closed: return Color.pelicanInk.opacity(0.2)
         default: return state.isTerminal ? Color.pelicanInk.opacity(0.25) : Color.pelicanInk.opacity(0.3)
+        }
+    }
+}
+
+/// The exposure count for one process, in the flow table.
+private struct ExposureCell: View {
+    @ObservedObject var `guard`: LeakGuard
+    let processName: String
+
+    var body: some View {
+        let findings = `guard`.findings(forOrigin: processName)
+        ExposureBadge(seen: findings.filter { $0.evidence.isSeen }.count,
+                      likely: findings.filter { !$0.evidence.isSeen }.count)
+    }
+}
+
+/// What left this Mac from the selected flow's process, under the detail card.
+private struct ExposureDetail: View {
+    @ObservedObject var `guard`: LeakGuard
+    let processName: String
+
+    var body: some View {
+        let findings = `guard`.findings(forOrigin: processName)
+        if !findings.isEmpty {
+            PelicanCard(padding: 14) {
+                ExposureList(findings: findings, limit: 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 }

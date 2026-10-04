@@ -64,12 +64,16 @@ package enum ExposureBasis: Sendable, Hashable, Codable {
 
     package var sentence: String {
         switch self {
-        case .documented(let source): return source
+        case .documented(let claim):
+            // The claim is a sentence of the vendor's own; keep it quoted and unpunctuated by us.
+            let trimmed = claim.trimmingCharacters(in: .whitespaces)
+            let body = trimmed.hasSuffix(".") ? String(trimmed.dropLast()) : trimmed
+            return "the vendor documents that \(body)"
         case .learned(let samples, let since):
             let day = DateFormatter.localizedString(from: since, dateStyle: .medium, timeStyle: .none)
-            return "\(samples) earlier readable request\(samples == 1 ? "" : "s") to this endpoint since \(day) carried it"
-        case .collector(let what): return what
-        case .volume(let what): return what
+            return "inferred because \(samples) earlier readable request\(samples == 1 ? "" : "s") to this endpoint since \(day) carried it"
+        case .collector(let what): return "inferred because \(what)"
+        case .volume(let what): return "inferred because \(what)"
         }
     }
 }

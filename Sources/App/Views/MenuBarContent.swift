@@ -1,5 +1,6 @@
 import PelicanKit
 import PelicanRao
+import PelicanGuard
 import SwiftUI
 
 struct MenuBarContent: View {
@@ -13,6 +14,12 @@ struct MenuBarContent: View {
     }
 }
 
+/// One line for Leak Guard, counting what Pelican read apart from what it inferred.
+private struct LeakGuardMenuStatus: View {
+    @ObservedObject var `guard`: LeakGuard
+    var body: some View { Text(`guard`.summaryLine) }
+}
+
 private struct MenuBarBody: View {
     @EnvironmentObject private var appState: AppState
     let openMain: () -> Void
@@ -20,6 +27,7 @@ private struct MenuBarBody: View {
 
     var body: some View {
         RaoMenuStatus(monitor: appState.rao)
+        LeakGuardMenuStatus(guard: appState.leakGuard)
         Divider()
         Button("Open Pelican") {
             appState.screen = .rao

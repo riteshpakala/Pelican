@@ -19,10 +19,14 @@ package final class AnalysisEngine: ObservableObject {
     @Published package var analysisError: String?
 
     private var runTask: Task<Void, Never>?
+    /// Shared with every other user of the model, so generations take turns.
+    package let gate: ModelGate
 
     static let batchSize = 35
 
-    package init() {}
+    package init(gate: ModelGate = ModelGate()) {
+        self.gate = gate
+    }
 
     package nonisolated static let systemPrompt = """
     You are a network threat-hunting analyst reviewing flows captured on a \
@@ -75,16 +79,22 @@ package final class AnalysisEngine: ObservableObject {
                 if Task.isCancelled { return }
                 progressText = "Analyzing batch \(index + 1) of \(batches.count) (\(batch.count) flows)…"
                 let user = instruction + "\n\nFlows:\n" + Self.serialize(batch) + Self.replyReminder
-                var reply = ""
+                let reply: String
                 do {
-                    for try await chunk in await llm.reply(system: Self.systemPrompt, user: user) {
-                        if Task.isCancelled { return }
-                        reply += chunk
+                    // Wait for the model to be free; another pass may be using it.
+                    reply = try await gate.run {
+                        var text = ""
+                        for try await chunk in await llm.reply(system: Self.systemPrompt, user: user) {
+                            if Task.isCancelled { break }
+                            text += chunk
+                        }
+                        return text
                     }
                 } catch {
                     analysisError = "Model error: \(error.localizedDescription)"
                     return
                 }
+                if Task.isCancelled { return }
                 rawOutput += (rawOutput.isEmpty ? "" : "\n") + reply
                 for (row, verdict) in Self.parseVerdicts(from: reply, presetName: presetName)
                 where row >= 1 && row <= batch.count {
