@@ -28,6 +28,16 @@ if arguments.contains("--capture-probe") {
         exit(0)
     }
     RunLoop.main.run()
+} else if arguments.contains("--tunnel") {
+    // `--tunnel status|install|remove`: drive the network extension headlessly, so the
+    // packaging can be checked without the UI.
+    let action = argument(after: "--tunnel") ?? "status"
+    NSApplication.shared.setActivationPolicy(.accessory)
+    Task { @MainActor in
+        await TunnelProbe.run(action)
+        exit(0)
+    }
+    NSApplication.shared.run()
 } else if arguments.contains("--ai-probe") {
     // What Pelican can see of the AI tools on this Mac, and how each connection is sourced.
     let seconds = argument(after: "--ai-probe").flatMap(Double.init) ?? 20

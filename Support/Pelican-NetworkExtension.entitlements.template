@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for Pelican itself when it is built with the tunnel.
+
+  A template: make-app.sh fills TEAM_ID_PLACEHOLDER from the provisioning profile and writes
+  the result into build/, which git ignores. No Team ID is ever committed.
+
+  NE_PROVIDER_PLACEHOLDER is "app-proxy-provider" for a development build and
+  "app-proxy-provider-systemextension" for a Developer ID one — Apple requires the suffixed
+  value when the extension ships outside the App Store.
+
+  Without the tunnel, Pelican is signed with the empty Support/Pelican.entitlements instead,
+  exactly as before.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.application-identifier</key>
+	<string>TEAM_ID_PLACEHOLDER.nyc.rao.pelican</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>TEAM_ID_PLACEHOLDER</string>
+	<!-- Lets Pelican ask macOS to install and remove its own extension. -->
+	<key>com.apple.developer.system-extension.install</key>
+	<true/>
+	<key>com.apple.developer.networking.networkextension</key>
+	<array>
+		<string>NE_PROVIDER_PLACEHOLDER</string>
+	</array>
+</dict>
+</plist>

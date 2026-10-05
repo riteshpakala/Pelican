@@ -121,6 +121,13 @@ let package = Package(
             path: "Tests/PelicanRaoTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // The network system extension. macOS runs it as root, so it links nothing but the
+        // system frameworks — no Pelican module, no third-party code.
+        .executableTarget(
+            name: "PelicanTunnel",
+            path: "Sources/Tunnel",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .testTarget(
             name: "PelicanInterceptTests",
             dependencies: ["PelicanKit", "PelicanIntercept"],

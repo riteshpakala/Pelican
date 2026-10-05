@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Pelican's network system extension.
+
+  Nothing here is specific to a developer account: the Team ID lives only in the provisioning
+  profile and the entitlements that make-app.sh generates into build/, which git ignores.
+
+  NEProviderClasses names the provider class for the kind of extension this is. The class is
+  declared @objc(PelicanTunnelProvider) so this name does not depend on Swift's module
+  mangling.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>nyc.rao.pelican.tunnel</string>
+	<key>CFBundleName</key>
+	<string>Pelican Tunnel</string>
+	<key>CFBundleDisplayName</key>
+	<string>Pelican Tunnel</string>
+	<key>CFBundleExecutable</key>
+	<string>PelicanTunnel</string>
+	<key>CFBundlePackageType</key>
+	<string>SYSX</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>GNU GPL v3</string>
+	<key>NSSystemExtensionUsageDescription</key>
+	<string>Pelican uses a network extension to show you what the AI tools on this Mac send. It only handles connections from the tools you turn inspection on for; everything else is handed straight back to macOS.</string>
+	<key>NetworkExtension</key>
+	<dict>
+		<key>NEProviderClasses</key>
+		<dict>
+			<key>com.apple.networkextension.app-proxy</key>
+			<string>PelicanTunnelProvider</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

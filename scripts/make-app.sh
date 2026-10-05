@@ -12,6 +12,12 @@
 #                             keychain by that prefix unless SIGN_IDENTITY names one)
 #         PELICAN_BUILD_SYSTEM=swiftbuild   see the PIN below
 #         FRIGATE_DIR=…       the Frigate checkout (default: ../../rao/repositories/Frigate)
+#         PELICAN_APP_PROFILE=…     provisioning profile for nyc.rao.pelican
+#         PELICAN_TUNNEL_PROFILE=…  provisioning profile for nyc.rao.pelican.tunnel
+#                             Set BOTH to build the network extension into the app. Unset, the
+#                             app is built exactly as before, without the tunnel.
+# PIN:  The Team ID is read from the profiles at build time and written only into build/, which
+#       git ignores. No profile, team or certificate is ever committed.
 # PIN:  MLX finds its kernels as `mlx.metallib` NEXT TO THE RUNNING BINARY: Contents/MacOS holds
 #       a symlink to the copy in Contents/Resources (see below), placed before signing.
 # PIN:  BUILD SYSTEM. SwiftPM's default engine tries to compile Frigate's vendored .metal
@@ -48,8 +54,22 @@ PKG_OS="$(sed -nE 's/.*\.macOS\(\.v([0-9]+)\).*/\1.0/p; s/.*\.macOS\("([0-9.]+)"
 PLIST_OS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' Support/Info.plist)"
 [ "$PKG_OS" = "$PLIST_OS" ] || fail "Package.swift says macOS $PKG_OS but Support/Info.plist says $PLIST_OS"
 
+# The tunnel is built only when both profiles are supplied; without them the app is exactly
+# what it was before this existed.
+APP_PROFILE="${PELICAN_APP_PROFILE:-}"
+TUNNEL_PROFILE="${PELICAN_TUNNEL_PROFILE:-}"
+WITH_TUNNEL=0
+if [ -n "$APP_PROFILE" ] && [ -n "$TUNNEL_PROFILE" ]; then
+    [ -f "$APP_PROFILE" ] || fail "PELICAN_APP_PROFILE is not a file: $APP_PROFILE"
+    [ -f "$TUNNEL_PROFILE" ] || fail "PELICAN_TUNNEL_PROFILE is not a file: $TUNNEL_PROFILE"
+    WITH_TUNNEL=1
+elif [ -n "$APP_PROFILE" ] || [ -n "$TUNNEL_PROFILE" ]; then
+    fail "set both PELICAN_APP_PROFILE and PELICAN_TUNNEL_PROFILE, or neither"
+fi
+
 echo "▸ swift build -c $CONFIG ($BUILD_SYSTEM)"
 swift build --build-system "$BUILD_SYSTEM" -c $CONFIG --product Pelican
+[ "$WITH_TUNNEL" = 1 ] && swift build --build-system "$BUILD_SYSTEM" -c $CONFIG --product PelicanTunnel
 
 echo "▸ assembling $APP_DIR"
 rm -rf "$APP_DIR" "$METADATA"
@@ -104,8 +124,49 @@ ICONSET="$REPO_ROOT/build/AppIcon.iconset"
 iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET" "$REPO_ROOT/build/AppIcon-partial.plist"
 
-# Identity: discovered by certificate-type prefix, never by a name written here.
+# The network system extension, when profiles were supplied.
+EXT_ID="nyc.rao.pelican.tunnel"
+EXT_DIR="$APP_DIR/Contents/Library/SystemExtensions/$EXT_ID.systemextension"
 ENTITLEMENTS="$REPO_ROOT/Support/Pelican.entitlements"
+if [ "$WITH_TUNNEL" = 1 ]; then
+    # The Team ID comes from the profile, never from this repository.
+    profile_value() { security cms -D -i "$1" 2>/dev/null | plutil -extract "$2" raw - 2>/dev/null; }
+    TEAM_ID="$(profile_value "$APP_PROFILE" 'Entitlements.com\.apple\.developer\.team-identifier')"
+    [ -n "$TEAM_ID" ] || fail "no team identifier in $APP_PROFILE"
+    TUNNEL_TEAM="$(profile_value "$TUNNEL_PROFILE" 'Entitlements.com\.apple\.developer\.team-identifier')"
+    [ "$TEAM_ID" = "$TUNNEL_TEAM" ] || fail "the two profiles are from different teams"
+
+    # A Developer ID profile carries the -systemextension entitlement values; a development one
+    # carries the plain ones. Signing with the wrong pair means macOS refuses to load it.
+    if security cms -D -i "$APP_PROFILE" 2>/dev/null | grep -q 'app-proxy-provider-systemextension'; then
+        NE_PROVIDER="app-proxy-provider-systemextension"
+        PROFILE_KIND="Developer ID"
+    else
+        NE_PROVIDER="app-proxy-provider"
+        PROFILE_KIND="development"
+    fi
+    echo "▸ network extension ($PROFILE_KIND profiles, $NE_PROVIDER)"
+
+    mkdir -p "$EXT_DIR/Contents/MacOS"
+    cp ".build/$CONFIG/PelicanTunnel" "$EXT_DIR/Contents/MacOS/PelicanTunnel"
+    cp "$REPO_ROOT/Support/Tunnel-Info.plist" "$EXT_DIR/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Add :PelicanBuildCommit string $commit" \
+        -c "Add :PelicanBuildDate string $built_at" "$EXT_DIR/Contents/Info.plist" >/dev/null
+    cp "$TUNNEL_PROFILE" "$EXT_DIR/Contents/embedded.provisionprofile"
+    cp "$APP_PROFILE" "$APP_DIR/Contents/embedded.provisionprofile"
+
+    # Entitlements are generated into build/ (git-ignored) from the templates.
+    fill() {
+        sed -e "s/TEAM_ID_PLACEHOLDER/$TEAM_ID/g" -e "s/NE_PROVIDER_PLACEHOLDER/$NE_PROVIDER/g" \
+            "$1" > "$2"
+    }
+    ENTITLEMENTS="$REPO_ROOT/build/Pelican.generated.entitlements"
+    EXT_ENTITLEMENTS="$REPO_ROOT/build/Tunnel.generated.entitlements"
+    fill "$REPO_ROOT/Support/Pelican-NetworkExtension.entitlements.template" "$ENTITLEMENTS"
+    fill "$REPO_ROOT/Support/Tunnel.entitlements.template" "$EXT_ENTITLEMENTS"
+fi
+
+# Identity: discovered by certificate-type prefix, never by a name written here.
 SIGN_FLAGS=()
 if [ "${DEVELOPER_ID:-0}" = 1 ]; then
     IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
@@ -115,7 +176,24 @@ if [ "${DEVELOPER_ID:-0}" = 1 ]; then
     echo "▸ codesign for distribution ($IDENTITY, hardened runtime)"
 else
     IDENTITY="${SIGN_IDENTITY:--}"
-    [ "$IDENTITY" = "-" ] && echo "▸ codesign (ad-hoc)" || echo "▸ codesign ($IDENTITY)"
+    # A profile build picks its certificate below, so it is not ad-hoc whatever this says.
+    if [ "$WITH_TUNNEL" = 0 ] || [ -n "${SIGN_IDENTITY:-}" ]; then
+        [ "$IDENTITY" = "-" ] && echo "▸ codesign (ad-hoc)" || echo "▸ codesign ($IDENTITY)"
+    fi
+fi
+
+# With a provisioning profile, the certificate is not a choice: the profile names the one it
+# authorises, and signing with any other — even another of the same type — makes the kernel
+# kill the app at launch. So unless SIGN_IDENTITY was given, sign with exactly that one.
+if [ "$WITH_TUNNEL" = 1 ] && [ -z "${SIGN_IDENTITY:-}" ]; then
+    PROFILE_CERT="$(security cms -D -i "$APP_PROFILE" 2>/dev/null \
+        | plutil -extract DeveloperCertificates.0 raw -o - - 2>/dev/null \
+        | base64 -d 2>/dev/null | shasum -a 1 | awk '{print toupper($1)}')"
+    [ -n "$PROFILE_CERT" ] || fail "could not read the signing certificate from $APP_PROFILE"
+    security find-identity -v -p codesigning 2>/dev/null | grep -q "$PROFILE_CERT" \
+        || fail "the profile authorises a certificate that is not in this keychain ($PROFILE_CERT)"
+    IDENTITY="$PROFILE_CERT"
+    echo "▸ codesign with the certificate the profile authorises"
 fi
 sign() { codesign --force --sign "$IDENTITY" ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} "$@"; }
 
@@ -149,6 +227,10 @@ find "$APP_DIR/Contents/Resources" -maxdepth 1 -name '*.bundle' -type d | while 
     fi
     sign "$bundle"
 done
+# Inside-out: the extension is nested code and must be sealed before the app around it.
+if [ "$WITH_TUNNEL" = 1 ]; then
+    sign --entitlements "$EXT_ENTITLEMENTS" "$EXT_DIR"
+fi
 sign --entitlements "$ENTITLEMENTS" "$APP_DIR"
 codesign --verify --deep --strict --verbose=1 "$APP_DIR"
 
@@ -167,6 +249,7 @@ cat > "$METADATA" <<JSON
   "signedBy": "$IDENTITY",
   "hardenedRuntime": $runtime,
   "buildSystem": "$BUILD_SYSTEM",
+  "networkExtension": $([ "$WITH_TUNNEL" = 1 ] && echo true || echo false),
   "executable": "Pelican.app/Contents/MacOS/Pelican",
   "sha256": "$sha"
 }
