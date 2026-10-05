@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import PelicanKit
 
 /// Pelican is read by the people it protects, so the repository must not carry anyone's
 /// private details: no home directory, and no Apple team identifier except other vendors'
@@ -77,5 +78,23 @@ import Testing
                 Issue.record("\(file.lastPathComponent) names a signing identity: \(name)")
             }
         }
+    }
+
+    @Test func diagnosticsNeverPrintATeamIdentifier() {
+        // The line systemextensionsctl prints, with a made-up identifier.
+        let line = "\t*\tAB12CD34EF\tnyc.rao.pelican.tunnel (0.2.0/1)\tPelican Tunnel\t[activated enabled]"
+        let masked = PrivateDetails.maskTeamIdentifiers(line)
+        #expect(!masked.contains("AB12CD34EF"))
+        #expect(masked.contains("(team)"))
+        // The rest survives: the bundle id and the state are what the line is for.
+        #expect(masked.contains("nyc.rao.pelican.tunnel"))
+        #expect(masked.contains("[activated enabled]"))
+        // Plain words and numbers are not mistaken for one.
+        #expect(PrivateDetails.maskTeamIdentifiers("EXTENSIONS 1234567890") == "EXTENSIONS 1234567890")
+    }
+
+    @Test func homeFoldersAreWrittenAsTilde() {
+        #expect(PrivateDetails.tilde("/Users/ada/projects/x", home: "/Users/ada") == "~/projects/x")
+        #expect(PrivateDetails.tilde("/usr/bin/curl", home: "/Users/ada") == "/usr/bin/curl")
     }
 }

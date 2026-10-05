@@ -58,12 +58,9 @@ enum TunnelProbe {
         process.waitUntilExit()
         let text = String(decoding: data, as: UTF8.self)
             .split(separator: "\n", omittingEmptySubsequences: true)
-            .map(String.init)
+            .map { PrivateDetails.maskTeamIdentifiers(String($0)) }
         return text.isEmpty ? ["(no output)"] : text
     }
 
-    private static func tilde(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
-    }
+    private static func tilde(_ path: String) -> String { PrivateDetails.tilde(path) }
 }
