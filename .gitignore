@@ -36,6 +36,13 @@ playground.xcworkspace
 # Pelican: assembled app, installer and metadata (scripts/make-app.sh, scripts/make-pkg.sh)
 build/
 
+# Pelican: provisioning profiles and signing material. Each carries a Team ID; the repository
+# is public, so these stay on the machine that signs releases and are passed in by path.
+certs/
+*.provisionprofile
+*.mobileprovision
+*.p12
+
 # Editor launch configurations
 .vscode/
 
