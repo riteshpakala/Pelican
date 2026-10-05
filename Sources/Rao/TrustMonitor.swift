@@ -15,16 +15,16 @@ struct HistoryDay: Sendable, Equatable, Identifiable {
 @MainActor
 package final class TrustMonitor: ObservableObject {
 
-    let app: RaoApp
+    package let app: RaoApp
 
     @Published private(set) var ledger: DayLedger
-    @Published private(set) var assessment: TrustAssessment
+    @Published package private(set) var assessment: TrustAssessment
     @Published private(set) var processes: [RaoProcess] = []
     @Published private(set) var findings: [RaoFinding] = []
     @Published private(set) var consent: ConsentSnapshot?
     @Published private(set) var reference: InstalledReference?
     @Published private(set) var declaredUsage: [String: String] = [:]
-    @Published private(set) var observing = false
+    @Published package private(set) var observing = false
     @Published private(set) var captureStatus: [FlowSourceKind: FlowSourceStatus] = [:]
     @Published private(set) var history: [HistoryDay] = []
     /// A past day being viewed (read-only); nil = today.

@@ -111,6 +111,8 @@ extension Probes {
         switch screen {
         case .aiTools: page = AnyView(AIToolsView(store: state.aiTools, host: state.host,
                                                   exposures: { state.leakGuard.findings(forTool: $0) }))
+        // "window" renders the whole shell, sidebar included, for checking the day's signals.
+        case .connections: page = AnyView(ContentView().environmentObject(state))
         default: page = AnyView(RaoView(monitor: state.rao, host: state.host))
         }
         let host = NSHostingView(rootView: page.frame(width: 1180)

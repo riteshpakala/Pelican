@@ -199,7 +199,7 @@ struct DayLedger: Sendable, Equatable, Codable {
     }
 }
 
-enum TrustLevel: String, Sendable, Codable, Comparable {
+package enum TrustLevel: String, Sendable, Codable, Comparable {
     case trusted, review, breach
 
     private var rank: Int {
@@ -209,9 +209,9 @@ enum TrustLevel: String, Sendable, Codable, Comparable {
         case .breach: return 2
         }
     }
-    static func < (a: TrustLevel, b: TrustLevel) -> Bool { a.rank < b.rank }
+    package static func < (a: TrustLevel, b: TrustLevel) -> Bool { a.rank < b.rank }
 
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .trusted: return "Within your consent"
         case .review: return "Worth a look"
@@ -220,10 +220,10 @@ enum TrustLevel: String, Sendable, Codable, Comparable {
     }
 }
 
-struct TrustAssessment: Sendable, Equatable, Codable {
-    var level: TrustLevel
+package struct TrustAssessment: Sendable, Equatable, Codable {
+    package var level: TrustLevel
     var reasons: [String]
-    var summary: String
+    package var summary: String
     var ranFor: TimeInterval
     var localConnections: Int
     var expectedConnections: Int

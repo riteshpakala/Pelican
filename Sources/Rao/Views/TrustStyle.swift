@@ -3,7 +3,7 @@ import PelicanUI
 import SwiftUI
 
 extension TrustLevel {
-    var color: Color {
+    package var color: Color {
         switch self {
         case .trusted: return .pelicanGreen
         case .review: return .pelicanGold
@@ -11,7 +11,7 @@ extension TrustLevel {
         }
     }
 
-    var symbol: String {
+    package var symbol: String {
         switch self {
         case .trusted: return "checkmark.shield.fill"
         case .review: return "exclamationmark.shield.fill"

@@ -210,6 +210,28 @@ package final class LeakGuard: ObservableObject {
         day.findings.filter { $0.originName == originName }
     }
 
+    /// Where the day stands at a glance. Deliberately not a claim that anything is "safe":
+    /// Pelican cannot read most traffic, so the calm state means *nothing was noticed*, which
+    /// is a weaker and more honest thing to say.
+    package enum Standing: Equatable {
+        /// Something personal was actually read leaving this Mac.
+        case seen(Int)
+        /// Only inferences: the traffic was encrypted and something about it suggests this.
+        case likely(Int)
+        /// Nothing noticed today — within the narrow part Pelican can examine.
+        case quiet
+        /// Not watching.
+        case paused
+    }
+
+    package var standing: Standing {
+        guard observing else { return .paused }
+        let seen = day.seen.count
+        if seen > 0 { return .seen(seen) }
+        let likely = day.likely.count
+        return likely > 0 ? .likely(likely) : .quiet
+    }
+
     /// "2 seen, 14 likely" — the menubar line. Counts never blur the two.
     package var summaryLine: String {
         let seen = day.seen.count, likely = day.likely.count

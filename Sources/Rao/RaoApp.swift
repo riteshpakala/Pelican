@@ -107,11 +107,11 @@ struct ConsentStore: Sendable, Hashable {
 
 /// One of Rao's apps, as Pelican watches it. Every value here is a product fact the app's own
 /// source and site state; none identifies a signing certificate or team.
-struct RaoApp: Identifiable, Sendable, Hashable {
+package struct RaoApp: Identifiable, Sendable, Hashable {
     enum Availability: Sendable, Hashable { case available, comingSoon }
 
-    let id: String
-    let name: String
+    package let id: String
+    package let name: String
     let tagline: String
     let availability: Availability
     let siteURL: URL

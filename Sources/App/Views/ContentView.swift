@@ -74,13 +74,18 @@ struct ContentView: View {
 
             Spacer()
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text("observe-only · live socket events · on-device mistral")
-                Text(BuildInfo.current.line)
-                    .help(BuildInfo.current.builtAt.map { "Built \($0)" } ?? "Built from source")
+            VStack(alignment: .leading, spacing: 8) {
+                DaySignals(rao: appState.rao, leakGuard: appState.leakGuard,
+                           aiTools: appState.aiTools)
+                Divider().opacity(0.4)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("observe-only · live socket events · on-device mistral")
+                    Text(BuildInfo.current.line)
+                        .help(BuildInfo.current.builtAt.map { "Built \($0)" } ?? "Built from source")
+                }
+                .font(.pelicanMono(8.5))
+                .foregroundStyle(Color.pelicanInk.opacity(0.3))
             }
-            .font(.pelicanMono(8.5))
-            .foregroundStyle(Color.pelicanInk.opacity(0.3))
             .padding(12)
         }
         .background(Color.pelicanBG)
@@ -111,5 +116,97 @@ private struct AIToolsScreen: View {
     var body: some View {
         AIToolsView(store: store, host: host,
                     exposures: { `guard`.findings(forTool: $0) })
+    }
+}
+
+/// The day in two lines: how Rao's apps stand against the consent you gave, and what Pelican
+/// has noticed the AI tools sending.
+///
+/// The two say different kinds of thing, and the wording keeps them apart. Rao's is a real
+/// verdict: Pelican knows what Ambient promised and can check every connection against it.
+/// The AI tools line is not a verdict — Pelican cannot read most of what they send, so the
+/// calm state means "nothing noticed", never "nothing happened".
+private struct DaySignals: View {
+    @ObservedObject var rao: TrustMonitor
+    @ObservedObject var leakGuard: LeakGuard
+    @ObservedObject var aiTools: AIToolsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            SignalRow(symbol: raoSymbol, tint: raoTint, label: "Rao",
+                      detail: raoDetail, explanation: raoExplanation)
+            SignalRow(symbol: toolsSymbol, tint: toolsTint, label: "AI tools",
+                      detail: toolsDetail, explanation: toolsExplanation)
+        }
+    }
+
+    // MARK: - Rao: a verdict, because there is a promise to check against
+
+    private var raoSymbol: String {
+        rao.observing ? rao.assessment.level.symbol : "shield.slash"
+    }
+    private var raoTint: Color {
+        rao.observing ? rao.assessment.level.color : Color.pelicanInk.opacity(0.35)
+    }
+    private var raoDetail: String {
+        guard rao.observing else { return "paused" }
+        switch rao.assessment.level {
+        case .trusted: return "within consent"
+        case .review: return "worth a look"
+        case .breach: return "outside consent"
+        }
+    }
+    private var raoExplanation: String {
+        guard rao.observing else { return "Pelican is not watching \(rao.app.name) right now." }
+        return "\(rao.app.name) today: \(rao.assessment.summary) "
+            + "Every connection is judged against the consent in force when it opened."
+    }
+
+    // MARK: - AI tools: what was noticed, which is not the same as what happened
+
+    private var toolsStanding: LeakGuard.Standing { leakGuard.standing }
+
+    private var toolsSymbol: String {
+        switch toolsStanding {
+        case .seen: return "eye.trianglebadge.exclamationmark.fill"
+        case .likely: return "eye"
+        case .quiet: return "eye"
+        case .paused: return "eye.slash"
+        }
+    }
+    private var toolsTint: Color {
+        switch toolsStanding {
+        case .seen: return .pelicanError
+        case .likely: return .pelicanGold
+        case .quiet: return .pelicanGreen
+        case .paused: return Color.pelicanInk.opacity(0.35)
+        }
+    }
+    private var toolsDetail: String {
+        switch toolsStanding {
+        case .seen(let count): return "\(count) seen leaving"
+        case .likely(let count): return "\(count) likely"
+        case .quiet: return runningToolCount > 0 ? "nothing noticed" : "none running"
+        case .paused: return "paused"
+        }
+    }
+    private var runningToolCount: Int { aiTools.running.count }
+
+    private var toolsExplanation: String {
+        let caveat = "Pelican cannot read what these tools send, so this covers where traffic "
+            + "went and what the tools were run with — not the contents. “Nothing noticed” is "
+            + "not a promise that nothing personal left."
+        switch toolsStanding {
+        case .seen(let count):
+            return "\(count) thing\(count == 1 ? "" : "s") Pelican could actually read left this Mac today. \(caveat)"
+        case .likely(let count):
+            return "\(count) inference\(count == 1 ? "" : "s") from encrypted traffic, each saying what it rests on. \(caveat)"
+        case .quiet:
+            return runningToolCount > 0
+                ? "Nothing noticed from the AI tools running today. \(caveat)"
+                : "No AI tools have run today."
+        case .paused:
+            return "Pelican is not watching right now."
+        }
     }
 }
