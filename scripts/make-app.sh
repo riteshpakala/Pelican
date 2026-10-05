@@ -152,6 +152,21 @@ if [ "$WITH_TUNNEL" = 1 ]; then
     cp "$REPO_ROOT/Support/Tunnel-Info.plist" "$EXT_DIR/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Add :PelicanBuildCommit string $commit" \
         -c "Add :PelicanBuildDate string $built_at" "$EXT_DIR/Contents/Info.plist" >/dev/null
+    # macOS caches an installed system extension and replaces it only when the version
+    # changes, so a development build whose version never moves leaves the Mac quietly running
+    # the previous copy. Development builds therefore carry the first digits of the binary's
+    # SHA-256 as a build number: it changes when — and only when — the extension changes, so
+    # rebuilding the same code does not churn. This is not a product version; the product
+    # version (CFBundleShortVersionString) is untouched, and release builds keep the plain
+    # build number.
+    if [ "$PROFILE_KIND" = "development" ]; then
+        EXT_HASH="$(shasum -a 256 "$EXT_DIR/Contents/MacOS/PelicanTunnel" | cut -c1-8)"
+        EXT_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXT_DIR/Contents/Info.plist")"
+        # CFBundleVersion must be numeric components, so the hex is read as a decimal number.
+        EXT_VERSION="$EXT_BUILD.$((16#$EXT_HASH))"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $EXT_VERSION" "$EXT_DIR/Contents/Info.plist"
+        echo "▸ extension build $EXT_VERSION (from the binary's hash, so it replaces only when changed)"
+    fi
     cp "$TUNNEL_PROFILE" "$EXT_DIR/Contents/embedded.provisionprofile"
     cp "$APP_PROFILE" "$APP_DIR/Contents/embedded.provisionprofile"
 

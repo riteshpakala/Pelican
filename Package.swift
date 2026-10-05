@@ -97,7 +97,7 @@ let package = Package(
         .executableTarget(
             name: "Pelican",
             dependencies: ["PelicanKit", "PelicanUI", "PelicanAnalyst", "PelicanRao",
-                           "PelicanAITools", "PelicanGuard"],
+                           "PelicanAITools", "PelicanGuard", "PelicanTunnelProtocol"],
             path: "Sources/App",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
@@ -121,12 +121,22 @@ let package = Package(
             path: "Tests/PelicanRaoTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-        // The network system extension. macOS runs it as root, so it links nothing but the
-        // system frameworks — no Pelican module, no third-party code.
+        // The small contract between the app and the extension. Foundation only, so the root
+        // extension stays minimal.
+        .target(
+            name: "PelicanTunnelProtocol",
+            path: "Sources/TunnelProtocol",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // The network system extension. macOS runs it as root, so besides the shared protocol
+        // it links nothing but the system frameworks — no Pelican module, no third-party code.
         .executableTarget(
             name: "PelicanTunnel",
+            dependencies: ["PelicanTunnelProtocol"],
             path: "Sources/Tunnel",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            // audit_token_to_pid, for reading which process a flow belongs to.
+            linkerSettings: [.linkedLibrary("bsm")]
         ),
         .testTarget(
             name: "PelicanInterceptTests",
