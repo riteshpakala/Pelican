@@ -2,6 +2,7 @@ import AppKit
 import PelicanAITools
 import PelicanAnalyst
 import PelicanKit
+import PelicanRadio
 import PelicanRao
 
 let arguments = CommandLine.arguments
@@ -46,11 +47,20 @@ if arguments.contains("--capture-probe") {
         exit(0)
     }
     RunLoop.main.run()
+} else if arguments.contains("--radio-probe") {
+    // What moves on the radio chips' transports, second by second, and what bluetoothd logs.
+    let seconds = argument(after: "--radio-probe").flatMap(Double.init) ?? 30
+    Task {
+        await RadioProbe.run(seconds: seconds)
+        exit(0)
+    }
+    RunLoop.main.run()
 } else if let path = argument(after: "--snapshot") {
-    // `--snapshot <file.png> [seconds] [rao|ai-tools]`
+    // `--snapshot <file.png> [seconds] [rao|ai-tools|radios|window]`
     let rest = arguments.drop { $0 != path }.dropFirst()
     let seconds = rest.compactMap(Double.init).first ?? 10
     let screen: Screen = rest.contains("ai-tools") ? .aiTools
+        : rest.contains("radios") ? .radios
         : (rest.contains("window") ? .connections : .rao)
     NSApplication.shared.setActivationPolicy(.accessory)
     Task { @MainActor in

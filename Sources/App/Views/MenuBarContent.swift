@@ -1,4 +1,5 @@
 import PelicanKit
+import PelicanRadio
 import PelicanRao
 import PelicanGuard
 import SwiftUI
@@ -28,6 +29,7 @@ private struct MenuBarBody: View {
     var body: some View {
         RaoMenuStatus(monitor: appState.rao)
         LeakGuardMenuStatus(guard: appState.leakGuard)
+        RadioMenuStatus(store: appState.radio)
         Divider()
         Button("Open Pelican") {
             appState.screen = .rao

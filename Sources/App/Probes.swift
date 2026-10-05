@@ -2,6 +2,7 @@ import Foundation
 import PelicanAITools
 import PelicanGuard
 import PelicanKit
+import PelicanRadio
 import PelicanRao
 import PelicanUI
 
@@ -99,9 +100,9 @@ import AppKit
 import SwiftUI
 
 extension Probes {
-    /// `Pelican --snapshot <file.png> [seconds] [rao|ai-tools]`: start watching as the app does, wait, then
-    /// render the Rao screen offscreen at full height — for documentation and for checking the
-    /// layout without scrolling. Uses PELICAN_LEDGER_DIR when set.
+    /// `Pelican --snapshot <file.png> [seconds] [rao|ai-tools|radios|window]`: start watching as the
+    /// app does, wait, then render a screen offscreen at full height — for documentation and for
+    /// checking the layout without scrolling. Uses PELICAN_LEDGER_DIR when set.
     @MainActor
     static func snapshot(to path: String, after seconds: Double, screen: Screen = .rao) async {
         let state = AppState.shared
@@ -111,6 +112,7 @@ extension Probes {
         switch screen {
         case .aiTools: page = AnyView(AIToolsView(store: state.aiTools, host: state.host,
                                                   exposures: { state.leakGuard.findings(forTool: $0) }))
+        case .radios: page = AnyView(RadioView(store: state.radio, host: state.host))
         // "window" renders the whole shell, sidebar included, for checking the day's signals.
         case .connections: page = AnyView(ContentView().environmentObject(state))
         default: page = AnyView(RaoView(monitor: state.rao, host: state.host))
@@ -136,6 +138,6 @@ extension Probes {
         } catch {
             print("snapshot failed: \(error)")
         }
-        state.flushNow()
+        state.shutdown()
     }
 }

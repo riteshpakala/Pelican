@@ -45,7 +45,8 @@ All headless:
 | `Pelican --identity sewn-server` | a process's path, bundle and code signature as macOS reports it (a pid, a name, or an app path) |
 | `Pelican --trust-probe 20` | Ambient's trust level, processes, findings and the day's report |
 | `Pelican --ai-probe 20` | the AI tools installed and running, how each connection is sourced to its tool, configured MCP servers, and destinations no catalog rule names |
-| `Pelican --snapshot rao.png 10` | the Rao screen rendered offscreen at full height (`ai-tools` as a last argument renders the AI Tools screen) |
+| `Pelican --radio-probe 30` | the transports the radio drivers count traffic on (the Bluetooth chip's HCI, ACL, SCO and ISO channels, its interrupts and antenna requests, the Wi-Fi bus and airtime), a line a second of what moved on each, the radio posture as macOS reports it, and what bluetoothd logs (interpreted, and counted by format when not) |
+| `Pelican --snapshot rao.png 10` | the Rao screen rendered offscreen at full height (`ai-tools` or `radios` as a last argument renders that screen; `window` the whole window) |
 | `Pelican --selftest` | loads the model and runs one analysis batch |
 
 `PELICAN_LEDGER_DIR=/tmp/ledger` points the ledger somewhere else while experimenting.
@@ -118,13 +119,17 @@ Sources/
   Guard/       PelicanGuard — Leak Guard: the detectors (this Mac's identifiers, patterns,
                field names), the predictor for encrypted traffic, known collectors, and the
                day's findings
+  Radio/       PelicanRadio — the radios: the chips' transport counters (IOReport), posture
+               (CoreWLAN, Lockdown Mode, interface counters), bluetoothd's log streamed and
+               parsed, switching Wi-Fi and the wired services off and checking they stay off,
+               the day's record and standing, the Radios screen, and the --radio-probe
   App/         Pelican, the executable — main, AppState, the sidebar shell, Connections,
                Processes, Analysis, Model, the menubar, the other probes
 Support/       Info.plist, entitlements, app icon
 scripts/       dev.sh, make-app.sh, make-pkg.sh, build-metallib.sh, gen-app-icon.swift, make-iconset.sh
 pkg/           installer Distribution.xml and postinstall
-Tests/         PelicanKitTests, PelicanRaoTests, PelicanAIToolsTests, PelicanGuardTests
-               (swift-testing)
+Tests/         PelicanKitTests, PelicanRaoTests, PelicanAIToolsTests, PelicanGuardTests,
+               PelicanRadioTests (swift-testing)
 ```
 
 `swift test --build-system native --filter PelicanRaoTests` builds and tests Rao without the app.

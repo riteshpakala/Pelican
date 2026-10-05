@@ -3,8 +3,13 @@
 <plist version="1.0">
 <dict>
 	<!--
-	No App Sandbox: Pelican runs /usr/bin/nettop, loads NetworkStatistics.framework, reads other
-	apps' bundles and code signatures, and caches HuggingFace models under the user's home.
+	No App Sandbox: Pelican runs /usr/bin/nettop and /usr/bin/log (bluetoothd's log, for the
+	Radios screen); loads NetworkStatistics.framework and libIOReport (the radio drivers'
+	counters); reads other apps' bundles and code signatures; and caches HuggingFace models under
+	the user's home. When asked to switch a wired service off it runs /usr/bin/osascript, which
+	asks macOS for a one-off authorization — no privileged helper is installed and nothing of the
+	authorization is kept. No Bluetooth usage key: Pelican never uses CoreBluetooth, so it never
+	asks for Bluetooth permission.
 	No hardened-runtime exceptions: everything is statically linked, and MLX compiles its Metal
 	kernels through the Metal compiler service, not writable+executable CPU pages.
 	Add keys here (not on the codesign command line) so make-app.sh and make-pkg.sh pick them up.

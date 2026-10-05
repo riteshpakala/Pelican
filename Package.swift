@@ -1,5 +1,5 @@
 // swift-tools-version: 6.0
-// Pelican — an open-source, observe-only network monitor for macOS, and a live trust monitor
+// Pelican — an open-source network monitor for macOS that never alters traffic, and a live trust monitor
 // for Rao's apps: it watches every connection their processes make and checks each one
 // against the consent the user gave. Capture: NetworkStatistics socket events plus nettop.
 // Analysis: an on-device Mistral MLX model (via the Frigate package).
@@ -10,9 +10,10 @@
 // App:     ./scripts/make-app.sh      Installer: ./scripts/make-pkg.sh
 //
 // Modules: PelicanKit (capture, flows, process identity; Foundation only) ← PelicanUI (design
-//          system) and PelicanAnalyst (the only module linking MLX) ← PelicanRao (everything
-//          about Rao's apps, isolated) ← Pelican (the app). Feature modules never import each
-//          other or the app; cross-module API is `package`, never `public`.
+//          system) and PelicanAnalyst (the only module linking MLX) ← the feature modules
+//          (PelicanRao, PelicanAITools, PelicanGuard, PelicanRadio) ← Pelican (the app). Feature
+//          modules never import each other or the app; cross-module API is `package`, never
+//          `public`.
 //
 // PIN: Frigate is a sibling checkout by path (FRIGATE_DIR overrides). Support/Info.plist is
 //      embedded into the binary with -sectcreate so `swift run` has a bundle identity and
@@ -94,10 +95,19 @@ let package = Package(
             path: "Sources/AITools",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // What reaches the Mac's radio chips: the drivers' transport counters (IOReport),
+        // bluetoothd's log, CoreWLAN and interface counters. No CoreBluetooth: Pelican must not
+        // ask for Bluetooth permission or become a client of the daemon it watches.
+        .target(
+            name: "PelicanRadio",
+            dependencies: ["PelicanKit", "PelicanUI"],
+            path: "Sources/Radio",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "Pelican",
             dependencies: ["PelicanKit", "PelicanUI", "PelicanAnalyst", "PelicanRao",
-                           "PelicanAITools", "PelicanGuard", "PelicanTunnelProtocol"],
+                           "PelicanAITools", "PelicanGuard", "PelicanRadio", "PelicanTunnelProtocol"],
             path: "Sources/App",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
@@ -154,6 +164,12 @@ let package = Package(
             name: "PelicanAIToolsTests",
             dependencies: ["PelicanKit", "PelicanAITools"],
             path: "Tests/PelicanAIToolsTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "PelicanRadioTests",
+            dependencies: ["PelicanKit", "PelicanRadio"],
+            path: "Tests/PelicanRadioTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

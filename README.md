@@ -7,8 +7,10 @@ for "Hey Mary", and in on-device mode it promises that nothing leaves your Mac e
 one-time model download. Pelican checks that promise: it watches every connection Ambient's
 processes make, judges each one against the consent you gave, and keeps the record on your Mac.
 
-Pelican only observes, and it carries no secrets. Everything it concludes comes from what macOS
-reports, and you can verify all of it by reading this repository.
+Pelican watches; it never alters or blocks traffic, and it carries no secrets. The one thing it
+changes is on the Radios screen, and only when you ask: it can switch Wi-Fi and the wired
+services off, and then keep checking that they stayed off. Everything it concludes comes from
+what macOS reports, and you can verify all of it by reading this repository.
 
 ![Pelican's Rao screen: Ambient within consent, the day hour by hour, the consent in force, and the identity of each process](README_Assets/rao.png)
 
@@ -64,7 +66,8 @@ Two limits, which Pelican reports rather than hides:
   report says so.
 - Time Ambient ran while Pelican wasn't watching is counted, shown, and lowers the day's level.
 
-Pelican cannot block anything. Its own network use is DNS lookups (including the AI tools
+Pelican cannot block or alter a connection. It can switch a whole interface off, if you ask it
+to on the Radios screen. Its own network use is DNS lookups (including the AI tools
 catalog's hostnames, so their addresses can be recognised) and, only if you load the analyst
 model, a HuggingFace download.
 
@@ -142,9 +145,80 @@ Until inspection exists, almost everything is *Likely*: the only text Pelican ca
 hostnames and the command lines of what an agent runs. The detectors that will read request
 contents are written and tested, and switch on when inspection does.
 
+## Radios
+
+The **Radios** screen shows what reached this Mac's radio chips today, counted on the chips' own
+transports.
+
+**Inside the Bluetooth module.** The Bluetooth chip talks to macOS over PCIe, through one channel
+per kind of traffic: HCI (commands to the chip, events from it), ACL (data for connected
+devices), SCO (call audio) and ISO (LE Audio). The chip's driver counts every packet the Mac
+hands it and every packet it hands back. Pelican reads those counters every second, along with
+the chip's interrupts and its requests for the antenna it shares with Wi-Fi (counted by the
+Wi-Fi driver, with the cause: *BLE Scan*, *Page Scan* and so on). The counters are read through
+IOReport, the same interface `powermetrics` uses, with no root, no permission prompt and no
+extra hardware. They sit below bluetoothd, so they count traffic whether or not anything logs
+it. Since the drivers never stop counting, what moved while the Mac slept or watching was paused
+is counted too, though not when it moved.
+
+![Pelican's Bluetooth module card: one row per channel — HCI, ACL, SCO, ISO, time sync, interrupts and antenna requests — each with packets counted toward the radio and back from it, when it last moved, and what Bluetooth wanted the antenna for](README_Assets/radios-bluetooth-module.png)
+
+**Inside the Wi-Fi chip.** The same, for Wi-Fi: doorbells rung to the chip, its interrupts, and
+the radio's own time spent transmitting and receiving.
+
+**Who asked.** bluetoothd's own log (`log stream`, which needs an administrator account) names
+the processes that asked for scans and other requests, by name and pid.
+
+Pelican also reads Wi-Fi power from CoreWLAN and Lockdown Mode from its preference. When **Wi-Fi
+is off and Lockdown Mode is on**, every channel that carried packets into the Bluetooth chip is
+itemised. It is a contradiction if the Wi-Fi radio counts transmit time, or a Wi-Fi interface
+counts packets, while Wi-Fi is reported off.
+
+It never asks for Bluetooth permission and never talks to bluetoothd. Log lines carry device
+names and addresses, so none is kept: only process names, counts, and the format of lines it
+could not read.
+
+The limit, stated on the screen: these are the Mac's own drivers counting. Anything the radio
+chip's firmware does on its own, without the Mac handing it a packet, does not pass through
+these channels. BLE advertising is the main case. One HCI command starts it, and that command is
+counted; the chip then advertises by itself until told to stop. While Wi-Fi is on, its antenna
+requests may still show the advertising. Counts are packets, not bytes, because the drivers
+publish no byte counts.
+
+### Switch off, and watch
+
+The screen's one control, and the only place Pelican changes anything. You pick what to switch
+off and Pelican asks macOS to do it:
+
+- **Wi-Fi**, through CoreWLAN — the same switch as the menu bar's. AirDrop and Sidecar go with it.
+- **Wired services** (Thunderbolt Bridge, USB adapters, a tethered iPhone), through
+  `networksetup`. These live in a root-owned file, so macOS asks you to authorize once. Pelican
+  installs no privileged helper and keeps nothing afterwards.
+- **Bluetooth stays yours**, in Control Center. Switching it here would mean asking for Bluetooth
+  permission and would drop your keyboard and mouse. Tell Pelican you have switched it off and it
+  will hold the chip's own counters to that.
+
+![Pelican's switch-off card: a checkbox for Wi-Fi and one for each wired service, a Switch off button, and below it a finding reading “Turned back on — Wi-Fi: you switched Wi-Fi off at 10:08 PM, and its radio is on again. Pelican did not do that.”](README_Assets/radios-switch-off.png)
+
+The switching is the unremarkable part: these are requests to the same macOS you are checking on,
+and none of them powers a chip down. What the control is for is the line underneath. Pelican goes
+on reading the counters, and anything afterwards becomes a finding:
+
+- an interface counting packets after you switched its service off;
+- the Wi-Fi radio counting transmit time while reported off;
+- data entering the Bluetooth chip after you said you had switched Bluetooth off;
+- **anything switched back on** — Pelican names it, because Pelican did not do it.
+
+Until something does, it says *stayed off*, with how long it has been checking. "Put back" enables
+only the services Pelican disabled, so one that was already off stays off. What you switched off
+stays off across midnight, and so does the check.
+
+`Pelican --radio-probe 30` prints the readings, a line a second. The day's record is kept for 30
+days in `~/Library/Application Support/Pelican/ledger/radio/`.
+
 ## Also in Pelican
 
-Beyond the Rao and AI Tools screens, Pelican is a general network monitor: **Connections** and **Processes**
+Beyond the Rao, AI Tools and Radios screens, Pelican is a general network monitor: **Connections** and **Processes**
 show every process's live flows with what Leak Guard has noted about each, and **Analysis** has
 an on-device Mistral model review them for beaconing, exfiltration-sized transfers, unexpected
 talkers and privacy exposure. All analysis is local.

@@ -5,6 +5,7 @@ import PelicanAITools
 import PelicanAnalyst
 import PelicanGuard
 import PelicanKit
+import PelicanRadio
 import PelicanRao
 import PelicanUI
 import SwiftUI
@@ -12,6 +13,7 @@ import SwiftUI
 enum Screen: String, CaseIterable, Identifiable {
     case rao = "Rao"
     case aiTools = "AI Tools"
+    case radios = "Radios"
     case connections = "Connections"
     case processes = "Processes"
     case analysis = "Analysis"
@@ -23,6 +25,7 @@ enum Screen: String, CaseIterable, Identifiable {
         switch self {
         case .rao: return "checkmark.shield"
         case .aiTools: return "bubble.left.and.text.bubble.right"
+        case .radios: return "antenna.radiowaves.left.and.right"
         case .connections: return "point.3.connected.trianglepath.dotted"
         case .processes: return "square.grid.2x2"
         case .analysis: return "sparkle.magnifyingglass"
@@ -77,6 +80,8 @@ final class AppState: ObservableObject {
     let aiTools = AIToolsStore()
     /// What personal information leaves this Mac, shown inside the existing screens.
     let leakGuard = LeakGuard()
+    /// What reaches the Mac's radio chips, counted on their own transports — the Radios tab.
+    let radio = RadioStore()
     private var cancellables: Set<AnyCancellable> = []
     private(set) var llm: LLMSession?
     private var snapshotTask: Task<Void, Never>?
@@ -129,17 +134,25 @@ final class AppState: ObservableObject {
         rao.start()
         aiTools.start()
         leakGuard.start()
+        radio.start()
         // Trace each new flow's process the moment it appears, before it can exit.
         let aiTools = self.aiTools
         Task { await monitor.onSighting { pid, time in aiTools.sight(pid: pid, at: time) } }
         startMonitor()
     }
 
-    /// Write every feature's day before quitting.
+    /// Write every feature's day.
     func flushNow() {
         rao.flushNow()
         aiTools.flushNow()
         leakGuard.flushNow()
+        radio.flushNow()
+    }
+
+    /// Quitting: end the child processes Pelican started, then write every feature's day.
+    func shutdown() {
+        radio.shutdown()
+        flushNow()
     }
 
     private func setCadence(_ seconds: Double) {
@@ -156,6 +169,7 @@ final class AppState: ObservableObject {
         rao.setObserving(true)
         aiTools.setObserving(true)
         leakGuard.setObserving(true)
+        radio.setObserving(true)
         let cadence = pollInterval
         if snapshotTask == nil {
             snapshotTask = Task {
@@ -177,6 +191,7 @@ final class AppState: ObservableObject {
         rao.setObserving(false)
         aiTools.setObserving(false)
         leakGuard.setObserving(false)
+        radio.setObserving(false)
         Task { await monitor.stop() }
     }
 

@@ -1,6 +1,7 @@
 import PelicanAITools
 import PelicanGuard
 import PelicanKit
+import PelicanRadio
 import PelicanRao
 import PelicanUI
 import SwiftUI
@@ -54,6 +55,9 @@ struct ContentView: View {
                         if screen == .aiTools {
                             AIToolsDot(store: appState.aiTools)
                         }
+                        if screen == .radios {
+                            RadioDot(store: appState.radio)
+                        }
                         if screen == .connections && appState.monitorRunning {
                             StatusDot(color: .pelicanGreen)
                         }
@@ -76,10 +80,10 @@ struct ContentView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 DaySignals(rao: appState.rao, leakGuard: appState.leakGuard,
-                           aiTools: appState.aiTools)
+                           aiTools: appState.aiTools, radio: appState.radio)
                 Divider().opacity(0.4)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("observe-only · live socket events · on-device mistral")
+                    Text("live socket events · radio counters · on-device mistral")
                     Text(BuildInfo.current.line)
                         .help(BuildInfo.current.builtAt.map { "Built \($0)" } ?? "Built from source")
                 }
@@ -97,6 +101,7 @@ struct ContentView: View {
         case .rao: RaoView(monitor: appState.rao, host: appState.host)
         case .aiTools: AIToolsScreen(store: appState.aiTools, guard: appState.leakGuard,
                                      host: appState.host)
+        case .radios: RadioView(store: appState.radio, host: appState.host)
         case .connections: ConnectionsView()
         case .processes: ProcessesView()
         case .analysis: AnalysisView()
@@ -119,17 +124,20 @@ private struct AIToolsScreen: View {
     }
 }
 
-/// The day in two lines: how Rao's apps stand against the consent you gave, and what Pelican
-/// has noticed the AI tools sending.
+/// The day in three lines: how Rao's apps stand against the consent you gave, what Pelican has
+/// noticed the AI tools sending, and what reached the Mac's Bluetooth radio.
 ///
-/// The two say different kinds of thing, and the wording keeps them apart. Rao's is a real
+/// The three say different kinds of thing, and the wording keeps them apart. Rao's is a real
 /// verdict: Pelican knows what Ambient promised and can check every connection against it.
 /// The AI tools line is not a verdict — Pelican cannot read most of what they send, so the
-/// calm state means "nothing noticed", never "nothing happened".
+/// calm state means "nothing noticed", never "nothing happened". The radios line is the Mac's
+/// own drivers counting what they handed the radio chip, so its calm state is "nothing seen":
+/// it cannot cover what the chip's firmware does alone.
 private struct DaySignals: View {
     @ObservedObject var rao: TrustMonitor
     @ObservedObject var leakGuard: LeakGuard
     @ObservedObject var aiTools: AIToolsStore
+    @ObservedObject var radio: RadioStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -137,6 +145,8 @@ private struct DaySignals: View {
                       detail: raoDetail, explanation: raoExplanation)
             SignalRow(symbol: toolsSymbol, tint: toolsTint, label: "AI tools",
                       detail: toolsDetail, explanation: toolsExplanation)
+            SignalRow(symbol: radioSymbol, tint: radioTint, label: "Radios",
+                      detail: radioDetail, explanation: radioExplanation)
         }
     }
 
@@ -205,6 +215,53 @@ private struct DaySignals: View {
             return runningToolCount > 0
                 ? "Nothing noticed from the AI tools running today. \(caveat)"
                 : "No AI tools have run today."
+        case .paused:
+            return "Pelican is not watching right now."
+        }
+    }
+
+    // MARK: - Radios: what the drivers handed the radio chip, which is not all a chip can do
+
+    private var radioSymbol: String {
+        switch radio.standing {
+        case .contradiction: return "exclamationmark.triangle.fill"
+        case .paused, .blind: return "antenna.radiowaves.left.and.right.slash"
+        case .lockedDown, .transmitting, .nothingReported: return "antenna.radiowaves.left.and.right"
+        }
+    }
+    private var radioTint: Color {
+        switch radio.standing {
+        case .contradiction: return .pelicanError
+        case .blind, .lockedDown: return .pelicanGold
+        case .transmitting: return Color.pelicanInk.opacity(0.6)
+        case .nothingReported: return .pelicanGreen
+        case .paused: return Color.pelicanInk.opacity(0.35)
+        }
+    }
+    private var radioDetail: String {
+        switch radio.standing {
+        case .contradiction(let count): return "\(count) contradiction\(count == 1 ? "" : "s")"
+        case .blind: return "can't see the radio"
+        case .lockedDown(let minutes): return "\(minutes) min sent, locked"
+        case .transmitting(let minutes): return "\(minutes) min sending"
+        case .nothingReported: return "nothing seen"
+        case .paused: return "paused"
+        }
+    }
+    private var radioExplanation: String {
+        let caveat = "Counted by the Mac's own drivers on the Bluetooth chip's transport. It cannot show "
+            + "what the chip's firmware does without the Mac handing it a packet."
+        switch radio.standing {
+        case .contradiction(let count):
+            return "\(count) reading\(count == 1 ? "" : "s") that cannot all be true — see the Radios screen. \(caveat)"
+        case .blind(let reason):
+            return "Pelican can read neither the Bluetooth chip's transport nor bluetoothd's log (\(reason)), so it knows nothing about Bluetooth right now."
+        case .lockedDown(let minutes):
+            return "With Wi-Fi off and Lockdown Mode on, data reached the Bluetooth radio in \(minutes) minute\(minutes == 1 ? "" : "s") today. \(caveat)"
+        case .transmitting(let minutes):
+            return "Data reached the Bluetooth radio in \(minutes) minute\(minutes == 1 ? "" : "s") today. \(caveat)"
+        case .nothingReported:
+            return "No data reached the Bluetooth radio today. \(caveat)"
         case .paused:
             return "Pelican is not watching right now."
         }

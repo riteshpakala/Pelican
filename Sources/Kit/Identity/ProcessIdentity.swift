@@ -58,6 +58,21 @@ package struct ProcessIdentity: Sendable, Equatable, Codable, Identifiable {
         return BSDInfo(parentPid: Int32(info.pbi_ppid), startTime: start, name: name.isEmpty ? comm : name)
     }
 
+    /// A process's name, for any process. `bsdInfo` is refused for processes of other users
+    /// (root daemons included) unless Pelican is root; the short form and the path are not.
+    package static func name(pid: Int32) -> String? {
+        if let bsd = bsdInfo(pid: pid) { return bsd.name }
+        var short = proc_bsdshortinfo()
+        let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
+        if proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &short, size) == size {
+            let comm = withUnsafeBytes(of: short.pbsi_comm) { raw in
+                String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+            }
+            if !comm.isEmpty { return comm }
+        }
+        return executablePath(pid: pid).map { ($0 as NSString).lastPathComponent }
+    }
+
     package static func executablePath(pid: Int32) -> String? {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))

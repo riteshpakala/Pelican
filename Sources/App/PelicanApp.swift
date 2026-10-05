@@ -26,8 +26,8 @@ struct PelicanApp: App {
     }
 }
 
-/// Keeps Pelican watching with its window closed, writes the ledger on quit, and has Rao turn
-/// trust changes into a Dock badge and notifications.
+/// Keeps Pelican watching with its window closed, ends its child processes and writes the ledger
+/// on quit, and has Rao turn trust changes into a Dock badge and notifications.
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
-            AppState.shared.flushNow()
+            AppState.shared.shutdown()
         }
     }
 }
