@@ -18,7 +18,17 @@ import Testing
         return url
     }()
 
-    private static let textExtensions: Set<String> = ["swift", "md", "sh", "plist", "xml", "entitlements", "json", "toml"]
+    private static let textExtensions: Set<String> = [
+        "swift", "md", "sh", "plist", "xml", "entitlements", "json", "toml",
+        "template", "xcscheme", "xcworkspacedata", "resolved",
+    ]
+
+    /// Everything a contributor commits: sources, tests, scripts, docs, the installer, the
+    /// signing templates, and the Xcode state that is easy to forget.
+    private static let everything = [
+        "Sources", "Tests", "scripts", "docs", "pkg", "Support", ".swiftpm",
+        "README.md", "Package.swift", "Package.resolved",
+    ]
 
     /// Every text file a contributor would commit (build products and dependency checkouts excluded).
     private static func files(under directories: [String]) -> [URL] {
@@ -38,7 +48,7 @@ import Testing
 
     @Test func noHomeDirectoryIsCommitted() throws {
         let home = FileManager.default.homeDirectoryForCurrentUser.path + "/"
-        for file in Self.files(under: ["Sources", "Tests", "scripts", "docs", "pkg", "Support", "README.md", "Package.swift"]) {
+        for file in Self.files(under: Self.everything) {
             let text = try String(contentsOf: file, encoding: .utf8)
             #expect(!text.contains(home), "\(file.lastPathComponent) contains this machine's home directory")
         }
@@ -49,15 +59,20 @@ import Testing
         // team identifier.
         let pattern = try NSRegularExpression(pattern: "\"([A-Z0-9]{10})\"")
         var catalogTeams: Set<String> = []
-        for file in Self.files(under: ["Sources"]) {
+        for file in Self.files(under: Self.everything) where file.pathExtension == "swift" {
             let text = try String(contentsOf: file, encoding: .utf8)
             let range = NSRange(text.startIndex..., in: text)
             for match in pattern.matches(in: text, range: range) {
                 let token = String(text[Range(match.range(at: 1), in: text)!])
                 guard token.contains(where: \.isLetter), token.contains(where: \.isNumber) else { continue }
-                if file.lastPathComponent == "AIToolCatalog.swift" {
+                // Two places may name a team, and only ever another vendor's: the AI tools
+                // catalog, which records what macOS reports for their apps, and the fixtures
+                // that test it. Anywhere else is a leak.
+                let isCatalog = file.lastPathComponent == "AIToolCatalog.swift"
+                let isFixture = file.pathComponents.contains("Tests")
+                if isCatalog {
                     catalogTeams.insert(token)
-                } else {
+                } else if !isFixture {
                     Issue.record("\(file.lastPathComponent) contains the team-identifier-shaped literal \(token); only the AI tools catalog may name a team, and only another vendor's")
                 }
             }
@@ -70,11 +85,14 @@ import Testing
         // "Developer ID Application: <name> (<team>)" must never appear with a real name in the
         // sources or scripts. Tests use "Example"; the catalog quotes no certificate subjects.
         let pattern = try NSRegularExpression(pattern: "Developer ID (Application|Installer): ([^\"(…]+)\\(")
-        for file in Self.files(under: ["Sources", "scripts", "docs", "README.md"]) {
+        for file in Self.files(under: Self.everything) {
             let text = try String(contentsOf: file, encoding: .utf8)
             let range = NSRange(text.startIndex..., in: text)
             for match in pattern.matches(in: text, range: range) {
                 let name = String(text[Range(match.range(at: 2), in: text)!]).trimmingCharacters(in: .whitespaces)
+                // Fixtures say "Example" and documentation writes <name>; a real certificate
+                // names a person or a company.
+                guard name != "Example", !name.hasPrefix("<") else { continue }
                 Issue.record("\(file.lastPathComponent) names a signing identity: \(name)")
             }
         }
@@ -96,5 +114,24 @@ import Testing
     @Test func homeFoldersAreWrittenAsTilde() {
         #expect(PrivateDetails.tilde("/Users/ada/projects/x", home: "/Users/ada") == "~/projects/x")
         #expect(PrivateDetails.tilde("/usr/bin/curl", home: "/Users/ada") == "/usr/bin/curl")
+    }
+
+    @Test func noEmailAddressIsCommitted() throws {
+        // Placeholders are how documentation and fixtures talk about addresses; a real one is
+        // somebody's, and this repository is public.
+        let allowed = ["noreply@anthropic.com", "ada@example.org", "<apple-id>"]
+        let pattern = try NSRegularExpression(
+            pattern: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+        for file in Self.files(under: Self.everything) {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            let range = NSRange(text.startIndex..., in: text)
+            for match in pattern.matches(in: text, range: range) {
+                let address = String(text[Range(match.range, in: text)!])
+                guard !allowed.contains(address),
+                      !address.hasSuffix("example.com"), !address.hasSuffix("example.org")
+                else { continue }
+                Issue.record("\(file.lastPathComponent) contains the address \(address)")
+            }
+        }
     }
 }

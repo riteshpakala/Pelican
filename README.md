@@ -104,6 +104,8 @@ The **AI Tools** screen shows what the AI tools on this Mac send, and which one 
 Code and Cursor are recognised today; Codex and Muse are listed and attribute nothing until
 someone confirms their identifiers with `Pelican --ai-probe`.
 
+![Pelican's AI Tools screen: what left this Mac today split into the model and telemetry, each exposure finding labelled Seen or Likely with what it rests on, and Claude Code's processes traced back through VS Code](README_Assets/ai-tools.png)
+
 - **Every connection is sourced to its tool**, with the reason shown: the tool's code
   signature, the app bundle it runs inside, or the process chain that leads back to it — so a
   `curl` that Claude Code runs inside VS Code is Claude Code's, shown as

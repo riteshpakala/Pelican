@@ -127,7 +127,7 @@ package struct ExposureFinding: Sendable, Hashable, Codable, Identifiable {
 /// Masks a value so it can be recognised but not used.
 package enum ExposureMask {
 
-    /// Keep a little shape, hide the rest: "ritesh@rao.nyc" → "r•••@r•••.nyc".
+    /// Keep a little shape, hide the rest: "ada@example.org" → "a•••@e•••.org".
     package static func sample(_ value: String, category: DataCategory) -> String {
         switch category {
         case .credentials:
