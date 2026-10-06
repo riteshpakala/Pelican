@@ -226,10 +226,10 @@ extension RaoApp {
                 purpose: "HuggingFace serves model files through CloudFront (recognised by reverse DNS)",
                 firstRunOnly: true, broad: true, requiresSetting: nil, resolve: []),
             ExpectedHost(
-                pattern: .exact("supabase.seer.services"), processes: nil, modes: [.signedIn],
+                pattern: .exact("api.rao.nyc"), processes: nil, modes: [.signedIn],
                 purpose: "Your Ambient account: sign-in, plan and keys",
                 firstRunOnly: false, broad: false, requiresSetting: nil,
-                resolve: ["supabase.seer.services"]),
+                resolve: ["api.rao.nyc"]),
             ExpectedHost(
                 pattern: .exact("api.mistral.ai"), processes: ["sewn-server", "thread"], modes: [.signedIn],
                 purpose: "Mistral: hosted replies, voice, picture descriptions and memory",
